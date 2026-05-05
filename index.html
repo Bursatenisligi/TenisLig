@@ -103,6 +103,62 @@
     <h4 style="color:#e65100; margin-bottom:10px;">⚠️ Eylem Gerektirenler</h4>
     <div id="lobby-actions-container" class="lobby-scroll-list" style="max-height: 200px; padding: 5px; background:transparent; border:none; box-shadow:none;">
         </div>
+        <div id="tab-tournaments" class="tab-section" style="display: none;">
+    <div class="header-container" style="margin-bottom: 15px; border-bottom: none;">
+        <h2 style="margin:0; text-align:left;">Turnuvalar 🏆</h2>
+    </div>
+
+    <div id="admin-tournament-controls" style="display: none; margin-bottom: 15px;">
+        <button id="btn-show-create-tournament" class="btn-main" style="background-color: #28a745;">+ Yeni Turnuva Oluştur</button>
+    </div>
+
+    <div id="tournament-list-view">
+        <div id="active-tournaments-container">
+            <p style="text-align:center; color:#777;">Aktif turnuva bulunmuyor.</p>
+        </div>
+    </div>
+
+    <div id="create-tournament-form" class="modern-form-container" style="display: none;">
+        <div class="form-header-row">
+            <button class="btn-back-small" onclick="document.getElementById('create-tournament-form').style.display='none'; document.getElementById('tournament-list-view').style.display='block';">⬅ Geri</button>
+            <h4>Yeni Turnuva Aç</h4>
+        </div>
+        <label class="input-label">Turnuva Adı</label>
+        <input type="text" id="tour-name" placeholder="Örn: Bursa Bahar Kupası">
+        
+        <label class="input-label">Format</label>
+        <select id="tour-format">
+            <option value="Tekler">Tekler</option>
+            <option value="Çiftler">Çiftler</option>
+        </select>
+
+        <label class="input-label">Giriş Ücreti / Bahis Puanı</label>
+        <input type="number" id="tour-fee" placeholder="Örn: 100" min="0">
+
+        <label class="input-label">Son Kayıt Tarihi</label>
+        <input type="datetime-local" id="tour-deadline">
+
+        <button id="btn-save-tournament" class="btn-save" style="margin-top: 15px;">Turnuvayı Başlat 🚀</button>
+    </div>
+
+    <div id="tournament-detail-view" style="display: none;">
+        <div class="form-header-row">
+            <button class="btn-back-small" onclick="document.getElementById('tournament-detail-view').style.display='none'; document.getElementById('tournament-list-view').style.display='block';">⬅ Listeye Dön</button>
+            <h4 id="detail-tour-name">Turnuva Detayı</h4>
+        </div>
+        
+        <div id="tour-registration-area" class="modern-stat-card" style="margin-bottom: 15px;">
+            </div>
+
+        <div id="tour-admin-manage-area" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffeeba;">
+            </div>
+
+        <h4 style="margin-top: 20px;">Eşleşmeler & Fikstür</h4>
+        <div id="tour-bracket-container" class="custom-bracket-container">
+            <p style="text-align:center; color:#777; width: 100%;">Eşleşmeler henüz belli değil.</p>
+        </div>
+    </div>
+</div>
 </div>
             <div id="email-spam-alert" class="warning-banner" style="display: flex;">
                 <div class="warning-icon">📧</div>
@@ -668,6 +724,7 @@
     <div style="height: 120px;"></div>
 <nav class="bottom-nav">
         <div class="nav-item active" data-target="tab-lobby"><span class="nav-icon">🏠</span><br>Lobi</div>
+        <div class="nav-item" data-target="tab-tournaments"><span class="nav-icon">🏆</span><br>Turnuva</div>
         <div class="nav-item" data-target="tab-rankings"><span class="nav-icon">🏆</span><br>Sıralama</div>
         <div class="nav-item" data-target="tab-challenge"><span class="nav-icon">⚔️</span><br>Meydan</div>
         
@@ -765,7 +822,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=16"></script>
+    <script src="app.js?=18"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {

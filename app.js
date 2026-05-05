@@ -220,6 +220,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const editProfilePhotoInput = document.getElementById('edit-profile-photo'); const editProfilePreview = document.getElementById('edit-profile-preview'); const editFullNameInput = document.getElementById('edit-full-name'); const editCourtPreference = document.getElementById('edit-court-preference'); const editNotificationPreference = document.getElementById('edit-notification-preference'); const saveProfileBtn = document.getElementById('save-profile-btn'); const logoutBtnProfile = document.getElementById('logout-btn-profile'); const myPhotosContainer = document.getElementById('my-photos-container'); 
     const statsViewPlayerSelect = document.getElementById('stats-view-player-select'); const statTotalMatch = document.getElementById('stat-total-match'); const statTotalWin = document.getElementById('stat-total-win'); const statTotalPointsDisplay = document.getElementById('stat-total-points'); const chartWinRate = document.getElementById('chart-win-rate'); const chartSetRate = document.getElementById('chart-set-rate'); const chartGameRate = document.getElementById('chart-game-rate'); const barClay = document.getElementById('bar-clay'); const valClay = document.getElementById('val-clay'); const barHard = document.getElementById('bar-hard'); const valHard = document.getElementById('val-hard'); const statFormBadges = document.getElementById('stat-form-badges');
     const navItems = document.querySelectorAll('.nav-item'); const tabSections = document.querySelectorAll('.tab-section');
+    // --- TURNUVA DOM ELEMENTLERİ ---
+    const btnShowCreateTournament = document.getElementById('btn-show-create-tournament');
+    const createTournamentForm = document.getElementById('create-tournament-form');
+    const tournamentListView = document.getElementById('tournament-list-view');
+    const activeTournamentsContainer = document.getElementById('active-tournaments-container');
+    const btnSaveTournament = document.getElementById('btn-save-tournament');
+    const tournamentDetailView = document.getElementById('tournament-detail-view');
+    const detailTourName = document.getElementById('detail-tour-name');
+    const tourRegistrationArea = document.getElementById('tour-registration-area');
+    const tourAdminManageArea = document.getElementById('tour-admin-manage-area');
+    const tourBracketContainer = document.getElementById('tour-bracket-container');
 
     const compressAndConvertToBase64 = (file, targetWidth = 1000) => {
         return new Promise((resolve, reject) => {
@@ -1638,6 +1649,8 @@ async function finalizeMatch(id, m) {
             else if (targetId === 'tab-fixture') { setTodayFilters(); loadMatchesForFixture(); }
             else if (targetId === 'tab-matches') { setHistoryTodayFilters(); loadMyMatchesOverview(); }
             else if (targetId === 'tab-bests') { loadTheBests(bestsFilterSelect.value); }
+            // Mevcut kodların arasında uygun bir yere (örneğin tab-bests'ten sonraya) ekle:
+            else if (targetId === 'tab-tournaments') { loadTournaments(); }
             else if (targetId === 'tab-chat') { loadChatList(); }
             else if (targetId === 'tab-rankings') { loadLeaderboard(); }
             else if (targetId === 'tab-lobby') { loadLobbyMyActions(); loadOpenRequests(); loadScheduledMatches(); loadAnnouncements(); }
@@ -1690,6 +1703,59 @@ async function finalizeMatch(id, m) {
     });
     }
 
+    // Turnuva Oluşturma Formunu Göster
+    if(btnShowCreateTournament) {
+        btnShowCreateTournament.addEventListener('click', () => {
+            tournamentListView.style.display = 'none';
+            createTournamentForm.style.display = 'block';
+        });
+    }
+
+    // Yeni Turnuvayı Kaydet
+    if(btnSaveTournament) {
+        btnSaveTournament.addEventListener('click', async () => {
+            const name = document.getElementById('tour-name').value.trim();
+            const format = document.getElementById('tour-format').value;
+            const fee = parseInt(document.getElementById('tour-fee').value) || 0;
+            const deadline = document.getElementById('tour-deadline').value;
+
+            if(!name || !deadline) return alert("Lütfen turnuva adını ve son kayıt tarihini girin.");
+
+            try {
+                btnSaveTournament.disabled = true;
+                btnSaveTournament.textContent = 'Oluşturuluyor...';
+
+                await db.collection('tournaments').add({
+                    name: name,
+                    format: format,
+                    fee: fee,
+                    deadline: firebase.firestore.Timestamp.fromDate(new Date(deadline)),
+                    status: 'Kayıt', // Durumlar: Kayıt, Kapalı, Devam Ediyor, Bitti
+                    creatorId: auth.currentUser.uid, // Turnuvayı kuran kişinin ID'si
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    participants: [] // Kayıt olanların tutulacağı dizi (Başlangıçta boş)
+                });
+
+                alert("Turnuva başarıyla oluşturuldu! 🏆");
+                createTournamentForm.style.display = 'none';
+                tournamentListView.style.display = 'block';
+                
+                // Formu temizle
+                document.getElementById('tour-name').value = '';
+                document.getElementById('tour-fee').value = '';
+                document.getElementById('tour-deadline').value = '';
+                
+                loadTournaments();
+
+            } catch(e) {
+                console.error("Turnuva oluşturma hatası: ", e);
+                alert("Hata oluştu: " + e.message);
+            } finally {
+                btnSaveTournament.disabled = false;
+                btnSaveTournament.textContent = 'Turnuvayı Başlat 🚀';
+            }
+        });
+    }
 
     if (authActionBtn) {
         authActionBtn.addEventListener('click', async () => {
@@ -2121,7 +2187,69 @@ submitChallengeBtn.addEventListener('click', async () => {
 
     }
 
+// --- TURNUVALARI LİSTELEME ---
+    function loadTournaments() {
+        if(!activeTournamentsContainer) return;
+        activeTournamentsContainer.innerHTML = '<p style="text-align:center; color:#999;">Yükleniyor...</p>';
 
+        const adminControls = document.getElementById('admin-tournament-controls');
+        // Not: Şimdilik "Yeni Turnuva Aç" butonunu herkese açık yaptık. 
+        // İleride sadece senin (Admin) görmeni istersen buraya bir UID if'i koyabiliriz.
+        if (adminControls) adminControls.style.display = 'block'; 
+
+        db.collection('tournaments').orderBy('createdAt', 'desc').get().then(snapshot => {
+            activeTournamentsContainer.innerHTML = '';
+            
+            if(snapshot.empty) {
+                activeTournamentsContainer.innerHTML = '<p style="text-align:center; color:#777; padding:15px;">Aktif turnuva bulunmuyor.</p>';
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const t = doc.data();
+                const tId = doc.id;
+                
+                // Tarihi güzel formata çevir
+                const dateStr = t.deadline ? t.deadline.toDate().toLocaleString('tr-TR', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : 'Belirtilmedi';
+
+                // Duruma göre rozet rengi
+                let statusBadge = '';
+                if(t.status === 'Kayıt') statusBadge = '<span class="match-status-badge status-green">Kayıtlar Açık</span>';
+                else if(t.status === 'Kapalı') statusBadge = '<span class="match-status-badge status-yellow">Kayıtlar Kapandı</span>';
+                else if(t.status === 'Devam Ediyor') statusBadge = '<span class="match-status-badge status-blue">Devam Ediyor</span>';
+                else statusBadge = '<span class="match-status-badge status-gray">Bitti</span>';
+
+                // Kartı oluştur
+                const card = document.createElement('div');
+                card.className = 'modern-list-item';
+                card.onclick = () => openTournamentDetail(tId, t); // Tıklayınca detaya gidecek
+
+                card.innerHTML = `
+                    <div class="list-item-left">
+                        <div class="list-item-icon" style="background:#fff3e0; color:#e65100;">🏆</div>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-title">${t.name}</div>
+                        <div class="list-item-subtitle">${t.format} • Katılım: ${t.fee} Puan<br>Son Kayıt: <strong>${dateStr}</strong></div>
+                    </div>
+                    <div class="list-item-right">
+                        ${statusBadge}
+                        <span style="font-size:0.8em; margin-top:5px; color:#c06035; font-weight:bold;">${t.participants ? t.participants.length : 0} Kayıt</span>
+                    </div>
+                `;
+                activeTournamentsContainer.appendChild(card);
+            });
+        }).catch(err => {
+            console.error("Turnuva yükleme hatası:", err);
+            activeTournamentsContainer.innerHTML = '<p style="text-align:center; color:red;">Yüklenemedi.</p>';
+        });
+    }
+
+    // Detay sayfası iskeleti (Hata almamak için şimdilik boş tanımlıyoruz)
+    window.openTournamentDetail = function(tourId, tourData) {
+        console.log("Seçilen Turnuva:", tourData.name);
+        // Bir sonraki adımda içini dolduracağız!
+    }
     const btnRankSingles = document.getElementById('btn-rank-singles');
     const btnRankDoubles = document.getElementById('btn-rank-doubles');
 

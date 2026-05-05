@@ -1894,3 +1894,87 @@ button:active {
     text-align: left;
 }
 .bg-red-light { background: #ffebee; color: #c62828; }
+/* --- ÖZEL TURNUVA AĞACI (BRACKET) STİLLERİ --- */
+.custom-bracket-container {
+    display: flex;
+    overflow-x: auto;
+    padding: 20px 10px;
+    gap: 30px;
+    background: #f8f9fa;
+    border-radius: 16px;
+    border: 1px solid #e9ecef;
+    -webkit-overflow-scrolling: touch;
+    min-height: 250px;
+}
+
+.bracket-round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 15px;
+    min-width: 180px;
+}
+
+.round-header {
+    text-align: center;
+    font-weight: 800;
+    color: #c06035;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.bracket-match {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+}
+
+.bracket-match:active {
+    transform: scale(0.98);
+}
+
+.match-player {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    font-size: 0.85em;
+    color: #555;
+}
+
+.match-player:last-child {
+    border-bottom: none;
+}
+
+.player-winner {
+    font-weight: bold;
+    color: #333;
+    background-color: #f0fdf4; /* Hafif yeşil zemin */
+}
+
+.player-winner span:last-child {
+    color: #28a745;
+    font-weight: 800;
+}
+
+/* Çizgiler için hazırlık (İleride ::after/::before ile bağlayacağız) */
+.bracket-match::after {
+    content: '';
+    position: absolute;
+    right: -15px;
+    top: 50%;
+    width: 15px;
+    height: 2px;
+    background-color: #ccc;
+    display: none; /* Şimdilik gizli, JS ile aktif edeceğiz */
+}
