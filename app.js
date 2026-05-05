@@ -2246,9 +2246,293 @@ submitChallengeBtn.addEventListener('click', async () => {
     }
 
     // Detay sayfası iskeleti (Hata almamak için şimdilik boş tanımlıyoruz)
+    // --- TURNUVA DETAY VE KAYIT İŞLEMLERİ ---
     window.openTournamentDetail = function(tourId, tourData) {
-        console.log("Seçilen Turnuva:", tourData.name);
-        // Bir sonraki adımda içini dolduracağız!
+        document.getElementById('tournament-list-view').style.display = 'none';
+        document.getElementById('tournament-detail-view').style.display = 'block';
+        document.getElementById('detail-tour-name').textContent = tourData.name;
+
+        const myUid = auth.currentUser.uid;
+        const isAdmin = (tourData.creatorId === myUid);
+        
+        // 1. Kayıt ve Durum Alanı
+        renderRegistrationArea(tourId, tourData, myUid);
+
+        // 2. Yönetici (Admin) Paneli
+        const adminArea = document.getElementById('tour-admin-manage-area');
+        if (isAdmin) {
+            adminArea.style.display = 'block';
+            if (tourData.status === 'Kayıt') {
+                adminArea.innerHTML = `
+                    <h4 style="margin-top:0; color:#856404;">🛠️ Turnuva Yönetimi</h4>
+                    <p style="font-size:0.9em; margin-bottom:10px;">Toplam Kayıt: <strong>${tourData.participants ? tourData.participants.length : 0}</strong></p>
+                    <button id="btn-close-registration" class="btn-main" style="background:#dc3545;">Kayıtları Kapat ve Kura Çekimine Geç 🔒</button>
+                `;
+                document.getElementById('btn-close-registration').onclick = () => closeRegistration(tourId, tourData);
+            } else if (tourData.status === 'Format_Secimi') {
+                adminArea.innerHTML = `
+                    <h4 style="margin-top:0; color:#856404;">🎲 Kura Çekimi</h4>
+                    <p style="font-size:0.9em; margin-bottom:10px;">Turnuvayı başlatmak üzeresiniz.</p>
+                    <button id="btn-generate-knockout" class="btn-main" style="background:#6f42c1;">Eleme Usulü Kura Çek (Ağaç Oluştur) 🎾</button>
+                `;
+                document.getElementById('btn-generate-knockout').onclick = () => generateKnockoutDraw(tourId, tourData);
+            } else {
+                adminArea.innerHTML = `<p style="color:#28a745; font-weight:bold; margin:0;">Turnuva Devam Ediyor 🏆</p>`;
+            }
+        } else {
+            adminArea.style.display = 'none';
+        }
+
+        // 3. Eşleşme (Bracket) Ağacı
+        const bracketContainer = document.getElementById('tour-bracket-container');
+        if (tourData.status === 'Kayıt' || tourData.status === 'Format_Secimi') {
+            bracketContainer.innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Eşleşmeler kura çekimi sonrası burada görünecektir.</p>';
+        } else if (tourData.bracket) {
+            renderTournamentBracket(tourData.bracket, 'tour-bracket-container');
+        }
+    };
+
+    // Kayıt Alanını Ekrana Çizen Yardımcı Fonksiyon
+    function renderRegistrationArea(tourId, tourData, myUid) {
+        const regArea = document.getElementById('tour-registration-area');
+        const participants = tourData.participants || [];
+        
+        let myRegistration = participants.find(p => p.p1 === myUid || p.p2 === myUid);
+        
+        if (tourData.status !== 'Kayıt') {
+            let html = `<p style="text-align:center; color:#856404; font-weight:bold;">Kayıtlar Kapalı</p>`;
+            if (myRegistration) html += `<p style="text-align:center; color:#28a745;">Bu turnuvada yarışıyorsun! Başarılar 🎾</p>`;
+            regArea.innerHTML = html;
+            return;
+        }
+
+        let html = `<div style="text-align:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <p style="margin:5px 0;"><strong>Format:</strong> ${tourData.format}</p>
+            <p style="margin:5px 0;"><strong>Katılım Bedeli:</strong> ${tourData.fee} Puan</p>
+        </div>`;
+
+        if (myRegistration) {
+            let partnerText = '';
+            if (tourData.format === 'Çiftler' && myRegistration.p2) {
+                const partnerName = userMap[myRegistration.p2 === myUid ? myRegistration.p1 : myRegistration.p2]?.isim || 'Partner';
+                partnerText = `<br><span style="font-size:0.9em; color:#555;">Takım Arkadaşın: <strong>${partnerName}</strong></span>`;
+            }
+            html += `
+                <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb;">
+                    <span style="font-size:2.5em; display:block; margin-bottom:10px;">✅</span>
+                    <h4 style="color:#28a745; margin:0 0 5px 0;">Turnuvaya Kayıtlısın!</h4>
+                    <p style="font-size:0.85em; color:#555; margin-bottom:15px;">Kura çekimini bekle... ${partnerText}</p>
+                    <button id="btn-cancel-tour-reg" class="btn-main" style="background:#dc3545; width:auto; padding:8px 20px;">Kaydımı İptal Et ❌</button>
+                </div>
+            `;
+            regArea.innerHTML = html;
+            document.getElementById('btn-cancel-tour-reg').onclick = () => cancelTournamentRegistration(tourId, myRegistration);
+        } else {
+            if (tourData.format === 'Çiftler') {
+                html += `
+                    <label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşın (Partnerin)</label>
+                    <select id="tour-partner-select" style="margin-bottom:15px;">
+                        <option value="">Lütfen Partner Seçin</option>
+                    </select>
+                `;
+            }
+            html += `<button id="btn-join-tour" class="btn-save" style="background:#28a745; font-size:1.1em; padding:15px;">Hemen Kayıt Ol 🎾</button>`;
+            regArea.innerHTML = html;
+
+            if (tourData.format === 'Çiftler') {
+                const selectEl = document.getElementById('tour-partner-select');
+                Object.values(userMap).forEach(player => {
+                    const isAlreadyRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
+                    if (player.uid !== myUid && !isAlreadyRegistered) {
+                        const opt = document.createElement('option');
+                        opt.value = player.uid;
+                        opt.textContent = player.isim || player.email;
+                        selectEl.appendChild(opt);
+                    }
+                });
+            }
+            document.getElementById('btn-join-tour').onclick = () => joinTournament(tourId, tourData, myUid);
+        }
+    }
+
+    // --- VERİTABANI: KAYIT EKLEME FONKSİYONU ---
+    async function joinTournament(tourId, tourData, myUid) {
+        const me = userMap[myUid];
+        if (me.toplamPuan < tourData.fee) {
+            return alert(`Bu turnuvaya katılmak için en az ${tourData.fee} puana ihtiyacın var.`);
+        }
+        let newRegistration = { p1: myUid, p2: null };
+        if (tourData.format === 'Çiftler') {
+            const partnerId = document.getElementById('tour-partner-select').value;
+            if (!partnerId) return alert("Çiftler turnuvası için lütfen listeden bir partner seçin!");
+            newRegistration.p2 = partnerId;
+        }
+        try {
+            document.getElementById('btn-join-tour').disabled = true;
+            document.getElementById('btn-join-tour').textContent = 'Kayıt Yapılıyor... ⏳';
+            await db.collection('tournaments').doc(tourId).update({ participants: firebase.firestore.FieldValue.arrayUnion(newRegistration) });
+            alert("Kayıt başarılı! 🏆 Turnuva heyecanına ortak oldun.");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+        } catch(e) {
+            console.error("Kayıt hatası:", e); alert("Kayıt sırasında bir hata oluştu: " + e.message);
+            document.getElementById('btn-join-tour').disabled = false;
+        }
+    }
+
+    // --- VERİTABANI: KAYIT İPTAL FONKSİYONU ---
+    async function cancelTournamentRegistration(tourId, registrationObj) {
+        if (!confirm("Turnuva kaydını iptal etmek istediğine emin misin?")) return;
+        try {
+            document.getElementById('btn-cancel-tour-reg').disabled = true;
+            document.getElementById('btn-cancel-tour-reg').textContent = 'İptal Ediliyor...';
+            await db.collection('tournaments').doc(tourId).update({ participants: firebase.firestore.FieldValue.arrayRemove(registrationObj) });
+            alert("Kaydın başarıyla iptal edildi.");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+        } catch(e) {
+            console.error("İptal hatası:", e); alert("İptal sırasında hata oluştu: " + e.message);
+            document.getElementById('btn-cancel-tour-reg').disabled = false;
+        }
+    }
+
+    // --- YÖNETİCİ: KAYITLARI KAPATMA ---
+    async function closeRegistration(tourId, tourData) {
+        if (!tourData.participants || tourData.participants.length < 2) {
+            return alert("Turnuvayı başlatmak için en az 2 kişi/takım gerekli!");
+        }
+        if (!confirm("Kayıtları kapatıp format seçimine geçmek istediğinize emin misiniz?")) return;
+        try {
+            await db.collection('tournaments').doc(tourId).update({ status: 'Format_Secimi' });
+            alert("Kayıtlar kapandı! Lütfen kura çekimini başlatın.");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+        } catch(e) { alert("Hata: " + e.message); }
+    }
+
+    // --- YÖNETİCİ: ELEME USULÜ KURA ÇEKİMİ (BRACKET OLUŞTURUCU) ---
+    async function generateKnockoutDraw(tourId, tourData) {
+        if (!confirm("Kura çekilecek ve eşleşmeler kalıcı olarak oluşturulacak. Onaylıyor musunuz?")) return;
+
+        let players = tourData.participants.map(p => {
+            let pts = userMap[p.p1]?.toplamPuan || 0;
+            if (tourData.format === 'Çiftler' && p.p2) pts += (userMap[p.p2]?.toplamPuan || 0);
+            return { ...p, points: pts };
+        });
+        players.sort((a, b) => b.points - a.points); 
+
+        const n = players.length;
+        const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
+        const byes = bracketSize - n;
+
+        for(let i=0; i<byes; i++) { players.push({ isBye: true }); }
+
+        function getSeededOrder(size) {
+            if (size <= 1) return [1];
+            const half = getSeededOrder(size / 2);
+            const res = [];
+            for (let i = 0; i < half.length; i++) { res.push(half[i]); res.push(size - half[i] + 1); }
+            return res; 
+        }
+
+        const seededPositions = getSeededOrder(bracketSize);
+        const firstRoundMatches = [];
+
+        for (let i = 0; i < bracketSize; i += 2) {
+            const p1Index = seededPositions[i] - 1;
+            const p2Index = seededPositions[i+1] - 1;
+
+            const player1 = players[p1Index];
+            const player2 = players[p2Index];
+
+            const autoWinner = player1.isBye ? player2 : (player2.isBye ? player1 : null);
+
+            firstRoundMatches.push({
+                matchId: `tour_${tourId}_R1_M${(i/2)+1}`,
+                p1: player1,
+                p2: player2,
+                winner: autoWinner, 
+                score: autoWinner ? 'Oynamadan Geçti' : null
+            });
+        }
+
+        const rounds = [];
+        rounds.push({ roundName: '1. Tur', matches: firstRoundMatches });
+
+        let currentRoundSize = bracketSize / 2;
+        let roundNum = 2;
+        while(currentRoundSize > 1) {
+            currentRoundSize = currentRoundSize / 2;
+            const nextRoundMatches = [];
+            for(let i=0; i<currentRoundSize; i++) {
+                nextRoundMatches.push({ matchId: `tour_${tourId}_R${roundNum}_M${i+1}`, p1: null, p2: null, winner: null, score: null });
+            }
+            
+            let rName = `${roundNum}. Tur`;
+            if (currentRoundSize === 4) rName = 'Çeyrek Final';
+            if (currentRoundSize === 2) rName = 'Yarı Final';
+            if (currentRoundSize === 1) rName = 'Final';
+
+            rounds.push({ roundName: rName, matches: nextRoundMatches });
+            roundNum++;
+        }
+
+        try {
+            await db.collection('tournaments').doc(tourId).update({ status: 'Devam Ediyor', bracket: rounds });
+            alert("Kura başarıyla çekildi ve eşleşmeler ayarlandı! 🏆");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+        } catch(e) { alert("Kura hatası: " + e.message); }
+    }
+
+    // --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
+    function renderTournamentBracket(roundsData, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; 
+
+        roundsData.forEach((round) => {
+            const roundDiv = document.createElement('div');
+            roundDiv.className = 'bracket-round';
+            
+            const header = document.createElement('div');
+            header.className = 'round-header';
+            header.textContent = round.roundName;
+            roundDiv.appendChild(header);
+
+            round.matches.forEach(match => {
+                const matchDiv = document.createElement('div');
+                matchDiv.className = 'bracket-match';
+
+                const getPlayerName = (p) => {
+                    if (!p) return '<span style="color:#ccc; font-style:italic;">Belirlenmedi</span>';
+                    if (p.isBye) return '<span style="color:#ccc; font-weight:bold;">BAY</span>';
+                    let name = userMap[p.p1]?.isim.split(' ')[0] || 'Oyuncu';
+                    if (p.p2) name += ` & ${userMap[p.p2]?.isim.split(' ')[0]}`;
+                    return name;
+                };
+
+                const isP1Winner = match.winner && (!match.winner.isBye) && match.winner.p1 === match.p1?.p1;
+                const isP2Winner = match.winner && (!match.winner.isBye) && match.winner.p1 === match.p2?.p1;
+
+                matchDiv.innerHTML = `
+                    <div class="match-player ${isP1Winner ? 'player-winner' : ''}">
+                        <span>${getPlayerName(match.p1)}</span>
+                        <span>${match.score && isP1Winner ? 'Galip' : '-'}</span>
+                    </div>
+                    <div class="match-player ${isP2Winner ? 'player-winner' : ''}">
+                        <span>${getPlayerName(match.p2)}</span>
+                        <span>${match.score && isP2Winner ? 'Galip' : '-'}</span>
+                    </div>
+                `;
+                
+                if (match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
+                    matchDiv.style.cursor = 'pointer';
+                }
+
+                roundDiv.appendChild(matchDiv);
+            });
+            container.appendChild(roundDiv);
+        });
     }
     const btnRankSingles = document.getElementById('btn-rank-singles');
     const btnRankDoubles = document.getElementById('btn-rank-doubles');
