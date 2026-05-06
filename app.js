@@ -2265,6 +2265,7 @@ submitChallengeBtn.addEventListener('click', async () => {
 
     
 // --- TURNUVA DETAY GÜNCELLEMESİ (LİSTE VE ADMİN KAYIT) ---
+// --- TURNUVA DETAY GÜNCELLEMESİ (LİSTE VE ADMİN KAYIT) ---
 window.openTournamentDetail = function(tourId, tourData) {
     document.getElementById('tournament-list-view').style.display = 'none';
     document.getElementById('tournament-detail-view').style.display = 'block';
@@ -2280,14 +2281,25 @@ window.openTournamentDetail = function(tourId, tourData) {
     const adminArea = document.getElementById('tour-admin-manage-area');
     if (isAdmin) {
         adminArea.style.display = 'block';
+
+        // Duruma Göre Organizatör Butonlarını Ayarla
+        let actionButtonsHTML = '';
+        if (tourData.status === 'Kayıt') {
+            actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
+        } else if (tourData.status === 'Format_Secimi') {
+            actionButtonsHTML = `
+                <button id="btn-generate-knockout" class="btn-main" style="background:#6f42c1; font-size:0.8em; padding:8px; flex:1;">Kura Çek (Ağaç Oluştur) 🎾</button>
+                <button id="btn-reopen-registration" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px; flex:1;">Kayıtları Aç 🔓</button>
+            `;
+        } else {
+            actionButtonsHTML = `<button id="btn-reopen-registration" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px; flex:1;">Kayıtları Aç 🔓</button>`;
+        }
+
         adminArea.innerHTML = `
             <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px;">+ Manuel Oyuncu Ekle</button>
-                ${tourData.status === 'Kayıt' 
-                    ? `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px;">Kayıtları Kapat 🔒</button>`
-                    : `<button id="btn-reopen-registration" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px;">Kayıtları Tekrar Aç 🔓</button>`
-                }
+            <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                <button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>
+                ${actionButtonsHTML}
             </div>
             <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
                 <label class="input-label">Oyuncu 1</label>
@@ -2304,11 +2316,16 @@ window.openTournamentDetail = function(tourId, tourData) {
             populateAdminPlayerSelects(tourData);
         };
 
+        // Buton Dinleyicilerini Bağla
         const btnCloseReg = document.getElementById('btn-close-registration');
         if (btnCloseReg) btnCloseReg.onclick = () => closeRegistration(tourId, tourData);
         
         const btnReopen = document.getElementById('btn-reopen-registration');
         if (btnReopen) btnReopen.onclick = () => updateTournamentStatus(tourId, 'Kayıt');
+        
+        const btnGenerate = document.getElementById('btn-generate-knockout');
+        if (btnGenerate) btnGenerate.onclick = () => generateKnockoutDraw(tourId, tourData);
+
         const btnAdminSaveReg = document.getElementById('btn-admin-save-reg');
         if (btnAdminSaveReg) {
             btnAdminSaveReg.onclick = () => adminAddParticipant(tourId);
@@ -2317,15 +2334,14 @@ window.openTournamentDetail = function(tourId, tourData) {
         adminArea.style.display = 'none';
     }
 
-        // 3. Eşleşme (Bracket) Ağacı
-const bracketContainer = document.getElementById('tour-bracket-container');
-        if (tourData.status === 'Kayıt' || tourData.status === 'Format_Secimi') {
-            bracketContainer.innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Eşleşmeler kura çekimi sonrası burada görünecektir.</p>';
-        } else if (tourData.bracket) {
-            // DÜZELTME: Artık tourId'yi ilk parametre olarak gönderiyoruz!
-            renderTournamentBracket(tourId, tourData, myUid); 
-        }
-    };
+    // 3. Eşleşme (Bracket) Ağacı
+    const bracketContainer = document.getElementById('tour-bracket-container');
+    if (tourData.status === 'Kayıt' || tourData.status === 'Format_Secimi') {
+        bracketContainer.innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Eşleşmeler kura çekimi sonrası burada görünecektir.</p>';
+    } else if (tourData.bracket) {
+        renderTournamentBracket(tourId, tourData, myUid); 
+    }
+};
 
     // Kayıt Alanını Ekrana Çizen Yardımcı Fonksiyon
     // --- KATILIMCI LİSTESİ VE KAYIT ALANI RENDER FONKSİYONU ---
