@@ -2845,34 +2845,53 @@ submitChallengeBtn.addEventListener('click', async () => {
 
     // --- 5. AĞAÇ (BRACKET) ÇİZİCİ VE LİNKLEYİCİ ---
 // --- 5. AĞAÇ (BRACKET) VE GRUP TABLOSU ÇİZİCİ ---
+// --- 5. AĞAÇ (BRACKET) VE GRUP TABLOSU ÇİZİCİ (TAM İSİM & KALICI GRUP SİSTEMİ) ---
+// --- 5. AĞAÇ (BRACKET) VE GRUP TABLOSU ÇİZİCİ (TAM İSİM & KALICI GRUP SİSTEMİ) ---
     window.renderTournamentBracket = function(tourId, tourData, myUid) {
         const container = document.getElementById('tour-bracket-container');
         if(!container) return; 
         container.innerHTML = ''; 
+        
+        // Flex düzenini bozmamak için ana kapsayıcıyı dikey (column) yapıyoruz
+        container.style.flexDirection = 'column';
+        container.style.gap = '30px';
+        container.style.alignItems = 'center';
+
         const isAdmin = (tourData.creatorId === myUid);
 
-        const getPlayerName = (p) => {
+        // YARDIMCI: Tam İsim Gösteren Fonksiyon
+        const getPlayerFullName = (p) => {
             if (!p) return '<span style="color:#ccc;">Bekleniyor</span>';
             if (p.isBye) return '<span style="color:#aaa;">- BAY -</span>';
-            let name = userMap[p.p1]?.isim.split(' ')[0] || 'Oyuncu'; 
-            if (p.p2) name += ` & ${userMap[p.p2]?.isim.split(' ')[0]}`; 
+            // .split(' ')[0] kısmını sildik, böylece userMap'teki tam isim ("Mehmet Yılmaz") gelecek
+            let name = userMap[p.p1]?.isim || 'Oyuncu'; 
+            if (p.p2) name += ` & ${userMap[p.p2]?.isim || 'Oyuncu'}`; 
             return name;
         };
 
-        // KONTROL 1: EĞER TURNUVA GRUP AŞAMASINDAYSA (Puan Durumu Çizilecek)
-        if (tourData.stage === 'Grup' && tourData.groups) {
-            container.style.flexDirection = 'column'; // Alt alta diz
-            container.style.gap = '20px';
+        // BÖLÜM 1: GRUPLARI ÇİZ (Eğer gruplar varsa her zaman göster)
+        if (tourData.groups && tourData.groups.length > 0) {
+            const groupsWrapper = document.createElement('div');
+            groupsWrapper.className = "groups-wrapper";
+            groupsWrapper.style.width = "100%";
+            groupsWrapper.style.display = "flex";
+            groupsWrapper.style.flexDirection = "column";
+            groupsWrapper.style.gap = "20px";
+
+            const groupHeader = document.createElement('h3');
+            groupHeader.innerHTML = "📊 Grup Puan Durumu";
+            groupHeader.style.textAlign = "center";
+            groupHeader.style.color = "#555";
+            groupsWrapper.appendChild(groupHeader);
 
             tourData.groups.forEach(group => {
                 const groupDiv = document.createElement('div');
                 groupDiv.style.background = '#fff';
-                groupDiv.style.borderRadius = '10px';
+                groupDiv.style.borderRadius = '12px';
                 groupDiv.style.border = '1px solid #ddd';
                 groupDiv.style.padding = '15px';
-                groupDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.05)';
+                groupDiv.style.boxShadow = '0 4px 10px rgba(0,0,0,0.05)';
 
-// Grup Puan Tablosu Başlığı ve Yüzde Sistemi
                 let html = `<h4 style="margin-top:0; color:#c06035; border-bottom:2px solid #eee; padding-bottom:5px;">${group.groupName}</h4>
                             <table style="width:100%; border-collapse: collapse; margin-bottom:15px; font-size:0.85em;">
                                 <tr style="background:#f8f9fa; border-bottom:1px solid #ddd; text-align:left;">
@@ -2880,23 +2899,21 @@ submitChallengeBtn.addEventListener('click', async () => {
                                     <th style="padding:8px; text-align:center;">O</th>
                                     <th style="padding:8px; text-align:center;">G</th>
                                     <th style="padding:8px; text-align:center;">M</th>
-                                    <th style="padding:8px; text-align:center;" title="Alınan Oyun">A.O</th>
-                                    <th style="padding:8px; text-align:center;" title="Verilen Oyun">V.O</th>
+                                    <th style="padding:8px; text-align:center;">A.O</th>
+                                    <th style="padding:8px; text-align:center;">V.O</th>
                                     <th style="padding:8px; text-align:center; color:#28a745;">%</th>
                                 </tr>`;
                 
-                // Oyuncuları Yüzdeye Göre Sırala
-// Oyuncuları Yüzdeye Göre Sırala ve Tabloyu Oluştur
                 let sortedPlayers = [...group.players].sort((a, b) => b.winRate - a.winRate || b.gamesWon - a.gamesWon);
-                const advCount = tourData.advancingCount || 2; // Gruptan kaç kişi çıkacak bilgisi
+                const advCount = tourData.advancingCount || 2;
 
                 sortedPlayers.forEach((p, pIdx) => {
-                    const isQualifying = (pIdx < advCount); // İlk X sırada mı?
-                    const rowStyle = isQualifying ? 'background: #e8f5e9;' : ''; // Çıkıyorsa yeşil arka plan
+                    const isQualifying = (pIdx < advCount);
+                    const rowStyle = isQualifying ? 'background: #e8f5e9;' : '';
                     const badge = isQualifying ? '<span style="color:#28a745; font-size:0.8em; margin-left:5px;">✅</span>' : '';
 
                     html += `<tr style="border-bottom:1px solid #eee; ${rowStyle}">
-                                <td style="padding:8px; font-weight:bold; color:#444;">${getPlayerName(p)}${badge}</td>
+                                <td style="padding:8px; font-weight:bold; color:#444;">${getPlayerFullName(p)}${badge}</td>
                                 <td style="padding:8px; text-align:center;">${p.played}</td>
                                 <td style="padding:8px; text-align:center;">${p.won}</td>
                                 <td style="padding:8px; text-align:center;">${p.lost}</td>
@@ -2905,60 +2922,93 @@ submitChallengeBtn.addEventListener('click', async () => {
                                 <td style="padding:8px; text-align:center; font-weight:bold; color:#28a745;">%${(p.winRate || 0).toFixed(1)}</td>
                              </tr>`;
                 });
-                html += `</table><div style="font-weight:bold; color:#555; font-size:0.85em; margin-bottom:5px; text-transform:uppercase;">Maçlar (Tıklayıp Sonuç Gir)</div><div style="display:flex; flex-direction:column; gap:8px;">`;
+                
+                html += `</table>`;
+                
+                // Grup Maçlarını sadece grup aşamasındayken veya adminse detaylı görsünler diye opsiyonel bırakabiliriz 
+                // ama genelde altta listelenmesi iyidir:
+                html += `<div style="font-weight:bold; color:#777; font-size:0.75em; margin-bottom:8px; text-transform:uppercase;">Grup Maçları</div><div style="display:flex; flex-direction:column; gap:8px;">`;
 
-                // Grubun Maçlarını Listele
                 group.matches.forEach(match => {
                     const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; 
                     const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
-                    
                     html += `
-                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'};" onclick="returnToTab = 'tab-tournaments'; showMatchDetail('${match.firestoreMatchId}')">
-                            <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
-                            <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
+                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'}; min-width:unset; width:100%;" onclick="returnToTab = 'tab-tournaments'; showMatchDetail('${match.firestoreMatchId}')">
+                            <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
+                            <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
                         </div>
                     `;
                 });
                 html += `</div>`;
                 groupDiv.innerHTML = html;
-                container.appendChild(groupDiv);
+                groupsWrapper.appendChild(groupDiv);
             });
-            return; // Eleme ağacı kodlarına girmemesi için işlemi burada bitir
+            container.appendChild(groupsWrapper);
         }
 
-        // KONTROL 2: EĞER TURNUVA ELEME (KNOCKOUT) AŞAMASINDAYSA
-        container.style.flexDirection = 'row'; // Eleme ağacı yan yana dizilir
-        container.style.gap = '30px';
+        // BÖLÜM 2: ELEME AĞACINI ÇİZ (Eğer oluşmuşsa grupların altına ekle)
+        if (tourData.bracket && tourData.bracket.length > 0) {
+            const bracketWrapper = document.createElement('div');
+            bracketWrapper.style.width = "100%";
+            bracketWrapper.style.marginTop = "20px";
+            bracketWrapper.style.paddingTop = "20px";
+            bracketWrapper.style.borderTop = "3px dashed #eee";
 
-        if (tourData.bracket) {
+            const bracketHeader = document.createElement('h3');
+            bracketHeader.innerHTML = "🏆 Eleme Turları (Final Yolu)";
+            bracketHeader.style.textAlign = "center";
+            bracketHeader.style.color = "#c06035";
+            bracketHeader.style.marginBottom = "20px";
+            bracketWrapper.appendChild(bracketHeader);
+
+            // Ağaç yan yana (row) kaydırılabilir olmalı
+            const treeScrollArea = document.createElement('div');
+            treeScrollArea.style.display = "flex";
+            treeScrollArea.style.flexDirection = "row";
+            treeScrollArea.style.gap = "30px";
+            treeScrollArea.style.overflowX = "auto";
+            treeScrollArea.style.padding = "10px 5px";
+            treeScrollArea.style.webkitOverflowScrolling = "touch";
+
             tourData.bracket.forEach((round, rIndex) => {
-                const roundDiv = document.createElement('div'); roundDiv.className = 'bracket-round';
+                const roundDiv = document.createElement('div'); 
+                roundDiv.className = 'bracket-round';
                 roundDiv.innerHTML = `<div class="round-header">${round.roundName}</div>`;
 
                 round.matches.forEach((match, mIndex) => {
-                    const matchDiv = document.createElement('div'); matchDiv.className = 'bracket-match';
-                    const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
-                    matchDiv.innerHTML = `<div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div><div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>`;
+                    const matchDiv = document.createElement('div'); 
+                    matchDiv.className = 'bracket-match';
+                    const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; 
+                    const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
+
+                    matchDiv.innerHTML = `
+                        <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
+                        <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
+                    `;
 
                     if (match.firestoreMatchId) {
                         matchDiv.style.border = "1px solid #c06035"; matchDiv.style.cursor = "pointer";
                         matchDiv.onclick = () => { returnToTab = 'tab-tournaments'; showMatchDetail(match.firestoreMatchId); };
-                    } else if (!match.winner && match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
-                        matchDiv.onclick = () => alert("Sistem hatası: Bu maçın dökümanı bulunamadı.");
                     }
-
                     roundDiv.appendChild(matchDiv);
                 });
-                container.appendChild(roundDiv);
+                treeScrollArea.appendChild(roundDiv);
             });
+            bracketWrapper.appendChild(treeScrollArea);
+            container.appendChild(bracketWrapper);
         }
     };
+// --- YÖNETİCİ: GRUPLARI BİTİR VE ELEME AĞACINA GEÇ ---
 // --- YÖNETİCİ: GRUPLARI BİTİR VE ELEME AĞACINA GEÇ ---
     window.transitionToKnockout = async function(tourId) {
         if(!confirm("Grup maçları bittiğine göre Eleme Ağacı (Fikstür) oluşturulacak. Onaylıyor musunuz?")) return;
         
         try {
-            document.getElementById('tournament-detail-view').innerHTML = '<p style="text-align:center; margin-top:50px;">Eleme ağacı hesaplanıyor... ⏳</p>';
+            // HATA BURADAYDI: Tüm sayfayı silmek yerine sadece bracket alanını "hesaplanıyor" yapıyoruz
+            const bracketCont = document.getElementById('tour-bracket-container');
+            if (bracketCont) {
+                bracketCont.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#c06035;">Eleme ağacı hesaplanıyor... Lütfen bekleyin ⏳</p>';
+            }
             
             const docRef = db.collection('tournaments').doc(tourId);
             const tourData = (await docRef.get()).data();
@@ -2973,12 +3023,10 @@ submitChallengeBtn.addEventListener('click', async () => {
             });
             
             // 2. Çıkanları Gruptaki "Oyun Kazanma Yüzdesine" Göre Küresel Olarak Sırala (Seribaşı Sistemi)
-            // transitionToKnockout içindeki sıralama kısmını şu şekilde güncelle:
-    // 2. Çıkanları Gruptaki "Oyun Kazanma Yüzdesine" Göre Küresel Olarak Sırala (Seribaşı Sistemi)
-    advancingPlayers.sort((a, b) => {
-        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
-        return b.gamesWon - a.gamesWon;
-    });
+            advancingPlayers.sort((a, b) => {
+                if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+                return b.gamesWon - a.gamesWon;
+            });
             
             // 3. Ağaç (Bracket) Boyutunu Belirle (4, 8, 16...)
             const n = advancingPlayers.length;
