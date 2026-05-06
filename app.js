@@ -2258,7 +2258,7 @@ submitChallengeBtn.addEventListener('click', async () => {
         // 1. Kayıt ve Durum Alanı
         renderRegistrationArea(tourId, tourData, myUid);
 
-        // 2. Yönetici (Admin) Paneli
+// 2. Yönetici (Admin) Paneli
         const adminArea = document.getElementById('tour-admin-manage-area');
         if (isAdmin) {
             adminArea.style.display = 'block';
@@ -2552,6 +2552,209 @@ submitChallengeBtn.addEventListener('click', async () => {
             loadLeaderboard(document.getElementById('leaderboard-club-filter').value);
         });
     }
+
+    // --- YÖNETİCİ: ELEME USULÜ KURA ÇEKİMİ (BRACKET OLUŞTURUCU) ---
+    async function generateKnockoutDraw(tourId, tourData) {
+        if (!confirm("Kura çekilecek ve eşleşmeler kalıcı olarak oluşturulacak. Onaylıyor musunuz?")) return;
+
+        const btn = document.getElementById('btn-generate-knockout');
+        if(btn) { btn.disabled = true; btn.textContent = "Hesaplanıyor... ⏳"; }
+
+        try {
+            // 1. Tüm tamamlanmış maçları çekip Game Kazanma Yüzdelerini Hesaplayalım
+            const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+            let gameStats = {}; // uid -> { w: Kazanılan Game, p: Oynanan Toplam Game }
+            
+            matchesSnap.forEach(doc => {
+                const m = doc.data();
+                if(m.skor) {
+                    const s = m.skor;
+                    const p1 = m.sonucuGirenID; // Skoru sisteme giren kişi
+                    const p2 = m.oyuncu1ID === p1 ? m.oyuncu2ID : m.oyuncu1ID; // Rakibi
+                    
+                    if(!gameStats[p1]) gameStats[p1] = { w: 0, p: 0 };
+                    if(!gameStats[p2]) gameStats[p2] = { w: 0, p: 0 };
+
+ // 3. seti tie-break kabul edip game hesaplamasının (yüzdenin) DIŞINDA bırakıyoruz
+                    const sets = [
+                        { w: s.s1_me, l: s.s1_opp, isTieBreak: false }, 
+                        { w: s.s2_me, l: s.s2_opp, isTieBreak: false }, 
+                        { w: s.s3_me, l: s.s3_opp, isTieBreak: true } // Bunu atlayacağız
+                    ];
+                    
+                    sets.forEach(set => {
+                        // Eğer bu bir tie-break setiyse (3. set), hesaplamadan çık (atla)
+                        if (set.isTieBreak) return;
+
+                        let w = parseInt(set.w || 0);
+                        let l = parseInt(set.l || 0);
+                        
+                        if(w + l > 0) {
+                            // Skoru girenin verileri
+                            gameStats[p1].w += w;
+                            gameStats[p1].p += (w + l);
+                            // Rakibin verileri
+                            gameStats[p2].w += l;
+                            gameStats[p2].p += (w + l);
+                        }
+                    });
+                }
+            });
+
+            // Yüzde hesaplama fonksiyonu (Örn: 4-1 biten maçta kazanan %80 alır)
+            const getGameWinRate = (uid) => {
+                if(!gameStats[uid] || gameStats[uid].p === 0) return 0;
+                return (gameStats[uid].w / gameStats[uid].p) * 100;
+            };
+
+            // 2. Oyuncuları "Game Kazanma Yüzdesine" Göre Sırala (Seeding)
+            let players = tourData.participants.map(p => {
+                let rate = getGameWinRate(p.p1);
+                
+                // Eğer çiftler formatıysa iki partnerin yüzdesinin ortalamasını al
+                if (tourData.format === 'Çiftler' && p.p2) {
+                    rate = (getGameWinRate(p.p1) + getGameWinRate(p.p2)) / 2; 
+                }
+                
+                return { ...p, points: rate }; // points alanına artık "Puan" değil "Yüzde" yazıyoruz
+            });
+            
+            // Yüzdesi en yüksek olan ilk sıraya yerleşir (Güçlüler seribaşı olur)
+            players.sort((a, b) => b.points - a.points); 
+
+            // 3. Tablo Boyutunu ve Bay (Bye) Sayısını Bul (2, 4, 8, 16, 32...)
+            const n = players.length;
+            const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
+            const byes = bracketSize - n;
+
+            // Eksik yerleri "BAY" ile doldur
+            for(let i=0; i<byes; i++) { players.push({ isBye: true }); }
+
+            // 4. Profesyonel Tenis Eşleşme Algoritması (1 ve 2'nin sadece finalde buluşması için)
+            function getSeededOrder(size) {
+                if (size <= 1) return [1];
+                const half = getSeededOrder(size / 2);
+                const res = [];
+                for (let i = 0; i < half.length; i++) {
+                    res.push(half[i]);
+                    res.push(size - half[i] + 1);
+                }
+                return res; 
+            }
+
+            const seededPositions = getSeededOrder(bracketSize);
+            const firstRoundMatches = [];
+
+            // 1. Tur maçlarını oluştur
+            for (let i = 0; i < bracketSize; i += 2) {
+                const p1Index = seededPositions[i] - 1;
+                const p2Index = seededPositions[i+1] - 1;
+
+                const player1 = players[p1Index];
+                const player2 = players[p2Index];
+
+                // Eğer rakip BAY ise, gerçek oyuncu otomatik kazanır
+                const autoWinner = player1.isBye ? player2 : (player2.isBye ? player1 : null);
+
+                firstRoundMatches.push({
+                    matchId: `tour_${tourId}_R1_M${(i/2)+1}`,
+                    p1: player1,
+                    p2: player2,
+                    winner: autoWinner, 
+                    score: autoWinner ? 'Oynamadan Geçti' : null
+                });
+            }
+
+            const rounds = [];
+            rounds.push({ roundName: '1. Tur', matches: firstRoundMatches });
+
+            // İleriki turların boş iskeletini (Çeyrek Final, Yarı Final) oluştur
+            let currentRoundSize = bracketSize / 2;
+            let roundNum = 2;
+            while(currentRoundSize > 1) {
+                currentRoundSize = currentRoundSize / 2;
+                const nextRoundMatches = [];
+                for(let i=0; i<currentRoundSize; i++) {
+                    nextRoundMatches.push({ matchId: `tour_${tourId}_R${roundNum}_M${i+1}`, p1: null, p2: null, winner: null, score: null });
+                }
+                
+                let rName = `${roundNum}. Tur`;
+                if (currentRoundSize === 4) rName = 'Çeyrek Final';
+                if (currentRoundSize === 2) rName = 'Yarı Final';
+                if (currentRoundSize === 1) rName = 'Final';
+
+                rounds.push({ roundName: rName, matches: nextRoundMatches });
+                roundNum++;
+            }
+
+            // 5. Firestore'a Kaydet ve Ekrana Bas
+            await db.collection('tournaments').doc(tourId).update({ status: 'Devam Ediyor', bracket: rounds });
+            alert("Kura başarıyla çekildi! Eşleşmeler Game Kazanma Yüzdelerine göre adil bir şekilde ayarlandı. 🏆");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+
+        } catch(e) { 
+            console.error(e);
+            alert("Kura hatası: " + e.message); 
+            if(btn) { btn.disabled = false; btn.textContent = "Eleme Usulü Kura Çek"; }
+        }
+    }
+// --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
+    function renderTournamentBracket(roundsData, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; 
+
+        roundsData.forEach((round) => {
+            const roundDiv = document.createElement('div');
+            roundDiv.className = 'bracket-round';
+            
+            const header = document.createElement('div');
+            header.className = 'round-header';
+            header.textContent = round.roundName;
+            roundDiv.appendChild(header);
+
+            round.matches.forEach(match => {
+                const matchDiv = document.createElement('div');
+                matchDiv.className = 'bracket-match';
+
+                // Oyuncu ismini düzgün formata getiren yardımcı
+                const getPlayerName = (p) => {
+                    if (!p) return '<span style="color:#ccc; font-style:italic;">Belirlenmedi</span>';
+                    if (p.isBye) return '<span style="color:#ccc; font-weight:bold;">BAY</span>';
+                    let name = userMap[p.p1]?.isim.split(' ')[0] || 'Oyuncu';
+                    if (p.p2) name += ` & ${userMap[p.p2]?.isim.split(' ')[0]}`;
+                    return name;
+                };
+
+                // Kimin kazandığını tespit edip ismini yeşil yapmak için
+                const isP1Winner = match.winner && (!match.winner.isBye) && match.winner.p1 === match.p1?.p1;
+                const isP2Winner = match.winner && (!match.winner.isBye) && match.winner.p1 === match.p2?.p1;
+
+                matchDiv.innerHTML = `
+                    <div class="match-player ${isP1Winner ? 'player-winner' : ''}">
+                        <span>${getPlayerName(match.p1)}</span>
+                        <span>${match.score && isP1Winner ? 'Galip' : '-'}</span>
+                    </div>
+                    <div class="match-player ${isP2Winner ? 'player-winner' : ''}">
+                        <span>${getPlayerName(match.p2)}</span>
+                        <span>${match.score && isP2Winner ? 'Galip' : '-'}</span>
+                    </div>
+                `;
+                
+                // Eğer maçta iki gerçek oyuncu varsa tıklanabilir yap (İleride skor girişi bağlayacağız)
+                if (match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
+                    matchDiv.style.cursor = 'pointer';
+                    // matchDiv.onclick = () => openTournamentMatchDetail(match.matchId); // Yakında!
+                }
+
+                roundDiv.appendChild(matchDiv);
+            });
+
+            container.appendChild(roundDiv);
+        });
+    }
+
+
 // --- SAFARİ/IOS UYUMLU MANUEL BİLDİRİM İZNİ (GÜNCELLENDİ) ---
     const btnEnablePush = document.getElementById('btn-enable-push');
     if (btnEnablePush) {
