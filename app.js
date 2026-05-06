@@ -2387,8 +2387,22 @@ submitChallengeBtn.addEventListener('click', async () => {
                 });
             }
 
-            if (allGroupsFinished && tourData.stage === 'Grup') {
-                actionButtonsHTML += `<button onclick="transitionToKnockout('${tourId}')" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1; width:100%; margin-top:10px;">Grupları Bitir ve Eleme Ağacına Geç 🏆</button>`;
+            // GRUP MAÇLARI BİTTİ Mİ KONTROLÜ (GÜNCEL)
+            if (tourData.stage === 'Grup' && tourData.groups) {
+                let allGroupsFinished = true;
+                tourData.groups.forEach(g => {
+                    // Eğer grupta maç varsa ve en az bir tanesinin winner'ı yoksa bitti sayma
+                    const hasUnfinishedMatch = g.matches.some(m => !m.winner);
+                    if (hasUnfinishedMatch) allGroupsFinished = false;
+                });
+
+                if (allGroupsFinished) {
+                    actionButtonsHTML += `
+                        <div style="width:100%; margin-top:10px; padding:10px; background:#e8f5e9; border-radius:8px; border:1px solid #c3e6cb; text-align:center;">
+                            <p style="color:#155724; font-weight:bold; margin-bottom:10px; font-size:0.9em;">🎉 Tüm grup maçları tamamlandı!</p>
+                            <button onclick="transitionToKnockout('${tourId}')" class="btn-main" style="background:#28a745; width:100%;">Eleme Ağacını (Fikstürü) Oluştur 🚀</button>
+                        </div>`;
+                }
             }
 
             if (tourData.status === 'Kayıt') {
@@ -2869,11 +2883,17 @@ submitChallengeBtn.addEventListener('click', async () => {
                                 </tr>`;
                 
                 // Oyuncuları Yüzdeye Göre Sırala
+// Oyuncuları Yüzdeye Göre Sırala ve Tabloyu Oluştur
                 let sortedPlayers = [...group.players].sort((a, b) => b.winRate - a.winRate || b.gamesWon - a.gamesWon);
-                
-                sortedPlayers.forEach(p => {
-                    html += `<tr style="border-bottom:1px solid #eee;">
-                                <td style="padding:8px; font-weight:bold; color:#444;">${getPlayerName(p)}</td>
+                const advCount = tourData.advancingCount || 2; // Gruptan kaç kişi çıkacak bilgisi
+
+                sortedPlayers.forEach((p, pIdx) => {
+                    const isQualifying = (pIdx < advCount); // İlk X sırada mı?
+                    const rowStyle = isQualifying ? 'background: #e8f5e9;' : ''; // Çıkıyorsa yeşil arka plan
+                    const badge = isQualifying ? '<span style="color:#28a745; font-size:0.8em; margin-left:5px;">✅</span>' : '';
+
+                    html += `<tr style="border-bottom:1px solid #eee; ${rowStyle}">
+                                <td style="padding:8px; font-weight:bold; color:#444;">${getPlayerName(p)}${badge}</td>
                                 <td style="padding:8px; text-align:center;">${p.played}</td>
                                 <td style="padding:8px; text-align:center;">${p.won}</td>
                                 <td style="padding:8px; text-align:center;">${p.lost}</td>
@@ -2950,7 +2970,12 @@ submitChallengeBtn.addEventListener('click', async () => {
             });
             
             // 2. Çıkanları Gruptaki "Oyun Kazanma Yüzdesine" Göre Küresel Olarak Sırala (Seribaşı Sistemi)
-            advancingPlayers.sort((a, b) => b.winRate - a.winRate || b.gamesWon - a.gamesWon);
+            // transitionToKnockout içindeki sıralama kısmını şu şekilde güncelle:
+    // 2. Çıkanları Gruptaki "Oyun Kazanma Yüzdesine" Göre Küresel Olarak Sırala (Seribaşı Sistemi)
+    advancingPlayers.sort((a, b) => {
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+        return b.gamesWon - a.gamesWon;
+    });
             
             // 3. Ağaç (Bracket) Boyutunu Belirle (4, 8, 16...)
             const n = advancingPlayers.length;
