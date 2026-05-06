@@ -2277,6 +2277,7 @@ submitChallengeBtn.addEventListener('click', async () => {
 
     // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
 // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
+// --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
     window.openTournamentDetail = function(tourId, tourData) {
         const container = document.getElementById('tournament-list-view');
         const detail = document.getElementById('tournament-detail-view');
@@ -2294,9 +2295,14 @@ submitChallengeBtn.addEventListener('click', async () => {
             adminArea.style.display = 'block';
             let actionButtonsHTML = '';
 
+            // DÜZELTME BURADA: Bay Geçilenleri maçtan saymıyoruz!
             let matchStarted = false;
             if(tourData.bracket) {
-                tourData.bracket.forEach(r => r.matches.forEach(m => { if(m.winner) matchStarted = true; }));
+                tourData.bracket.forEach(r => r.matches.forEach(m => { 
+                    if(m.winner && m.score !== "Bay Geçti" && m.score !== "Oynamadan Geçti") {
+                        matchStarted = true; 
+                    }
+                }));
             }
 
             if (tourData.status === 'Kayıt') {
@@ -2314,7 +2320,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                 if(!matchStarted) {
                     actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px; flex:1;">Kayıtları Aç 🔓</button>`;
                 } else {
-                    actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center; width:100%;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
+                    actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center; width:100%;">Gerçek maçlar başladığı için kayıtlar kilitlendi.</p>`;
                 }
             }
 
