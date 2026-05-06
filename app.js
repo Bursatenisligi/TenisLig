@@ -2550,11 +2550,16 @@ window.openTournamentDetail = function(tourId, tourData) {
     }
 
     // --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
-    function renderTournamentBracket(roundsData, containerId) {
-        const container = document.getElementById(containerId);
+// --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
+    // (Güncellendi: Artık tourId'yi de alıyor ve tıklama olayını dinliyor)
+    window.renderTournamentBracket = function(tourData, myUid) {
+        const container = document.getElementById('tour-bracket-container');
+        if(!container) return;
         container.innerHTML = ''; 
+        const roundsData = tourData.bracket;
+        const isAdmin = (tourData.creatorId === myUid);
 
-        roundsData.forEach((round) => {
+        roundsData.forEach((round, rIndex) => {
             const roundDiv = document.createElement('div');
             roundDiv.className = 'bracket-round';
             
@@ -2563,7 +2568,7 @@ window.openTournamentDetail = function(tourId, tourData) {
             header.textContent = round.roundName;
             roundDiv.appendChild(header);
 
-            round.matches.forEach(match => {
+            round.matches.forEach((match, mIndex) => {
                 const matchDiv = document.createElement('div');
                 matchDiv.className = 'bracket-match';
 
@@ -2581,22 +2586,115 @@ window.openTournamentDetail = function(tourId, tourData) {
                 matchDiv.innerHTML = `
                     <div class="match-player ${isP1Winner ? 'player-winner' : ''}">
                         <span>${getPlayerName(match.p1)}</span>
-                        <span>${match.score && isP1Winner ? 'Galip' : '-'}</span>
+                        <span style="font-size:0.8em;">${isP1Winner ? (match.score || 'Galip') : '-'}</span>
                     </div>
                     <div class="match-player ${isP2Winner ? 'player-winner' : ''}">
                         <span>${getPlayerName(match.p2)}</span>
-                        <span>${match.score && isP2Winner ? 'Galip' : '-'}</span>
+                        <span style="font-size:0.8em;">${isP2Winner ? (match.score || 'Galip') : '-'}</span>
                     </div>
                 `;
                 
-                if (match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
+                // EĞER ADMİNSE VE İKİ OYUNCU DA BELLİYSE SKOR GİRİLEBİLİR
+                if (isAdmin && match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
                     matchDiv.style.cursor = 'pointer';
+                    matchDiv.onclick = () => openTourScoreModal(tourData.id, rIndex, mIndex, match);
+                } else if (!isAdmin && match.p1 && match.p2) {
+                    // Normal oyuncular için tıklama efekti yok
+                    matchDiv.style.cursor = 'default';
                 }
 
                 roundDiv.appendChild(matchDiv);
             });
             container.appendChild(roundDiv);
         });
+    }
+    // --- TURNUVA MOTORU: SKOR GİRİŞİ VE TUR ATLATMA ---
+    window.openTourScoreModal = function(tourId, rIndex, mIndex, match) {
+        const modal = document.getElementById('tour-score-modal');
+        const titleEl = document.getElementById('tour-score-match-title');
+        const selectEl = document.getElementById('tour-score-winner-select');
+        const inputEl = document.getElementById('tour-score-input');
+        const btnSave = document.getElementById('btn-save-tour-score');
+
+        // İsimleri al
+        const p1Name = userMap[match.p1.p1]?.isim.split(' ')[0] || 'Oyuncu 1';
+        const p2Name = userMap[match.p2.p1]?.isim.split(' ')[0] || 'Oyuncu 2';
+        
+        titleEl.textContent = `${p1Name} vs ${p2Name}`;
+        
+        selectEl.innerHTML = `
+            <option value="">Seçiniz</option>
+            <option value="p1">${p1Name}</option>
+            <option value="p2">${p2Name}</option>
+        `;
+        inputEl.value = match.score || '';
+
+        modal.style.display = 'flex';
+
+        btnSave.onclick = () => advanceTournamentWinner(tourId, rIndex, mIndex, selectEl.value, inputEl.value);
+    };
+
+    async function advanceTournamentWinner(tourId, rIndex, mIndex, winnerChoice, scoreStr) {
+        if (!winnerChoice) return alert("Lütfen kazananı seçin!");
+        if (!scoreStr) return alert("Lütfen maç skorunu girin!");
+
+        try {
+            document.getElementById('btn-save-tour-score').disabled = true;
+            document.getElementById('btn-save-tour-score').textContent = "İşleniyor... ⏳";
+
+            const docRef = db.collection('tournaments').doc(tourId);
+            const docSnap = await docRef.get();
+            const tourData = docSnap.data();
+            const bracket = tourData.bracket;
+
+            const match = bracket[rIndex].matches[mIndex];
+            const winnerObj = winnerChoice === 'p1' ? match.p1 : match.p2;
+            
+            // 1. Oynanan maçın sonucunu kaydet
+            bracket[rIndex].matches[mIndex].winner = winnerObj;
+            bracket[rIndex].matches[mIndex].score = scoreStr;
+
+            // 2. Bir sonraki tura (Next Round) kazananı aktar
+            const nextRoundIndex = rIndex + 1;
+            
+            // Eğer bu bir final maçı değilse (Yani bir sonraki tur varsa)
+            if (nextRoundIndex < bracket.length) {
+                // Sonraki maçın sırasını bulma formülü: mIndex / 2 (Aşağı yuvarla)
+                const nextMatchIndex = Math.floor(mIndex / 2);
+                // Üstteki (çift) slot mu, alttaki (tek) slot mu?
+                const isPlayer1Slot = (mIndex % 2 === 0);
+
+                if (isPlayer1Slot) {
+                    bracket[nextRoundIndex].matches[nextMatchIndex].p1 = winnerObj;
+                } else {
+                    bracket[nextRoundIndex].matches[nextMatchIndex].p2 = winnerObj;
+                }
+            } else {
+                // FİNAL MAÇI BİTTİYSE!
+                tourData.status = 'Bitti';
+                alert(`🏆 Turnuva Şampiyonu Belli Oldu: ${userMap[winnerObj.p1]?.isim}!`);
+            }
+
+            // Veritabanını güncelle
+            await docRef.update({ 
+                bracket: bracket,
+                status: tourData.status
+            });
+
+            document.getElementById('tour-score-modal').style.display = 'none';
+            alert("Skor kaydedildi ve kazanan üst tura atladı! ✅");
+            
+            // Ekranı yenile
+            const updatedTour = await docRef.get();
+            openTournamentDetail(tourId, { ...updatedTour.data(), id: tourId });
+
+        } catch (error) {
+            console.error(error);
+            alert("Hata oluştu: " + error.message);
+        } finally {
+            document.getElementById('btn-save-tour-score').disabled = false;
+            document.getElementById('btn-save-tour-score').textContent = "Skoru Kaydet ve Tur Atlat 🚀";
+        }
     }
     const btnRankSingles = document.getElementById('btn-rank-singles');
     const btnRankDoubles = document.getElementById('btn-rank-doubles');
@@ -2816,6 +2914,24 @@ window.openTournamentDetail = function(tourId, tourData) {
 
             container.appendChild(roundDiv);
         });
+    }
+
+    // --- YARDIMCI: ADMİN MANUEL OYUNCU EKLEME LİSTESİNİ DOLDURMA ---
+    function populateAdminPlayerSelects(tourData) {
+        const p1Select = document.getElementById('admin-p1-select');
+        const p2Select = document.getElementById('admin-p2-select');
+        const participants = tourData.participants || [];
+
+        let optionsHTML = '<option value="">Lütfen Oyuncu Seçin</option>';
+        Object.values(userMap).forEach(p => {
+            const isRegistered = participants.some(pt => pt.p1 === p.uid || pt.p2 === p.uid);
+            if (!isRegistered) {
+                optionsHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`;
+            }
+        });
+
+        if (p1Select) p1Select.innerHTML = optionsHTML;
+        if (p2Select) p2Select.innerHTML = optionsHTML;
     }
 async function adminAddParticipant(tourId) {
     const p1 = document.getElementById('admin-p1-select').value;
