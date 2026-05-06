@@ -2353,6 +2353,7 @@ submitChallengeBtn.addEventListener('click', async () => {
 // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
 // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
 // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
+// --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
     window.openTournamentDetail = function(tourId, tourData) {
         const container = document.getElementById('tournament-list-view');
         const detail = document.getElementById('tournament-detail-view');
@@ -2371,6 +2372,8 @@ submitChallengeBtn.addEventListener('click', async () => {
             let actionButtonsHTML = '';
 
             let matchStarted = false;
+            
+            // Eleme Ağacı (Bracket) Maçları Başladı mı?
             if(tourData.bracket) {
                 tourData.bracket.forEach(r => r.matches.forEach(m => { 
                     if(m.winner && m.score !== "Bay Geçti" && m.score !== "Oynamadan Geçti") {
@@ -2378,33 +2381,15 @@ submitChallengeBtn.addEventListener('click', async () => {
                     }
                 }));
             }
-            // GRUP MAÇLARI BİTTİ Mİ KONTROLÜ
-            let allGroupsFinished = false;
-            if (tourData.stage === 'Grup' && tourData.groups) {
-                allGroupsFinished = true;
-                tourData.groups.forEach(g => {
-                    g.matches.forEach(m => { if(!m.winner) allGroupsFinished = false; });
-                });
+            
+            // EKSİK OLAN KISIM BURASIYDI: Grup Maçları Başladı mı Kontrolü
+            if(tourData.groups) {
+                tourData.groups.forEach(g => g.matches.forEach(m => {
+                    if(m.winner) matchStarted = true;
+                }));
             }
 
-            // GRUP MAÇLARI BİTTİ Mİ KONTROLÜ (GÜNCEL)
-            if (tourData.stage === 'Grup' && tourData.groups) {
-                let allGroupsFinished = true;
-                tourData.groups.forEach(g => {
-                    // Eğer grupta maç varsa ve en az bir tanesinin winner'ı yoksa bitti sayma
-                    const hasUnfinishedMatch = g.matches.some(m => !m.winner);
-                    if (hasUnfinishedMatch) allGroupsFinished = false;
-                });
-
-                if (allGroupsFinished) {
-                    actionButtonsHTML += `
-                        <div style="width:100%; margin-top:10px; padding:10px; background:#e8f5e9; border-radius:8px; border:1px solid #c3e6cb; text-align:center;">
-                            <p style="color:#155724; font-weight:bold; margin-bottom:10px; font-size:0.9em;">🎉 Tüm grup maçları tamamlandı!</p>
-                            <button onclick="transitionToKnockout('${tourId}')" class="btn-main" style="background:#28a745; width:100%;">Eleme Ağacını (Fikstürü) Oluştur 🚀</button>
-                        </div>`;
-                }
-            }
-
+            // Duruma Göre Normal Butonları Ayarla
             if (tourData.status === 'Kayıt') {
                 actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
             } else if (tourData.status === 'Format_Secimi') {
@@ -2412,9 +2397,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
                         <div style="display:flex; gap:10px;">
                             <button onclick="generateKnockoutDraw('${tourId}', true)" class="btn-main" style="background:#6f42c1; font-size:0.8em; padding:8px; flex:1;">Direkt Eleme 🎾</button>
-                            
                             <button onclick="document.getElementById('group-settings-area').style.display='block'" class="btn-main" style="background:#007bff; font-size:0.8em; padding:8px; flex:1;">Grup + Eleme 👥</button>
-                        
                         </div>
                         <button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px;">Kayıtları Tekrar Aç 🔓</button>
                     </div>`;
@@ -2422,17 +2405,37 @@ submitChallengeBtn.addEventListener('click', async () => {
                 if(!matchStarted) {
                     actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px; flex:1;">Kayıtları Aç 🔓</button>`;
                 } else {
-                    actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center; width:100%;">Gerçek maçlar başladığı için kayıtlar kilitlendi.</p>`;
+                    actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center; width:100%; margin:5px 0;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
                 }
             }
 
+            // GRUPLAR BİTTİ Mİ KONTROLÜ VE DEV BUTON
+            let groupFinishHTML = '';
+            if (tourData.stage === 'Grup' && tourData.groups) {
+                let allGroupsFinished = true;
+                tourData.groups.forEach(g => {
+                    // Eğer grupta sonucu girilmemiş tek bir maç bile varsa bitmemiştir
+                    if (g.matches.some(m => !m.winner)) allGroupsFinished = false;
+                });
+
+                if (allGroupsFinished) {
+                    groupFinishHTML = `
+                        <div style="width:100%; margin-top:15px; padding:15px; background:#e8f5e9; border-radius:8px; border:1px solid #c3e6cb; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                            <p style="color:#155724; font-weight:bold; margin-top:0; margin-bottom:10px; font-size:1.1em;">🎉 Tüm Grup Maçları Tamamlandı!</p>
+                            <button onclick="transitionToKnockout('${tourId}')" class="btn-main" style="background:#28a745; width:100%; font-size:1em; padding:10px;">🏆 Eleme Ağacına (Fikstüre) Geç</button>
+                        </div>
+                    `;
+                }
+            }
+
+            // EKRANA ÇİZ
             adminArea.innerHTML = `
                 <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
                 <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
                     ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
                     ${actionButtonsHTML}
                 </div>
-                <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
+                ${groupFinishHTML} <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
                     <label class="input-label">Oyuncu 1</label>
                     <select id="admin-p1-select"></select>
                     ${tourData.format === 'Çiftler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
