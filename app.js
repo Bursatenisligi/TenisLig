@@ -1400,23 +1400,27 @@ function showMatchDetail(matchDocId) {
         try { await firebase.firestore().collection('matches').doc(matchId).update(updateData); alert("Düzeltme başarıyla gönderildi! Şimdi rakibinin onayı bekleniyor. 🔄"); showMatchDetail(matchId); } catch (e) { console.error("Güncelleme Hatası:", e); alert("Değişiklik kaydedilirken bir hata oluştu."); }
     }
 
-async function finalizeMatch(id, m) {
+// --- MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
+    async function finalizeMatch(id, m) {
         const batch = db.batch(); 
         const wid = m.adayKazananID; 
         const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
-        // --- ÇİFTLER PARTNERLERİNİ TESPİT ET ---
+        // Çiftler partnerlerini tespit et
         let wPartnerId = null; let lPartnerId = null;
         if (m.macFormati === 'Çiftler') {
             wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
             lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
         }
-        // ---------------------------------------
 
+        // Skor ve Puan hesabı
         let wg = 0, lg = 0;
         if(m.skor) {
             const s = m.skor; const isEntryByWinner = m.sonucuGirenID === wid;
-            const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0); const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0); const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0); const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
+            const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0); 
+            const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0); 
+            const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0); 
+            const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
             wg = s1w + s2w; lg = s1l + s2l;
         }
         const bonusW = wg * 5; const bonusL = lg * 5;
@@ -1432,35 +1436,43 @@ async function finalizeMatch(id, m) {
             const gInc = isWin ? 1 : 0;
             
             if (m.macFormati === 'Çiftler') {
-                // Çiftler maçıysa ciftlerPuani'ni güncelle (Yoksa 1000'den başlat)
+                // SADECE ÇİFTLER PUANINA EKLE
                 const uData = userMap[uid] || {};
                 const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
-                batch.update(ref, { ciftlerPuani: currentCiftler + pts });
+                batch.update(ref, { 
+                    ciftlerPuani: currentCiftler + pts,
+                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc),
+                    macSayisi: firebase.firestore.FieldValue.increment(1)
+                });
             } else {
-                // Tekler maçıysa normal puanları güncelle
-                batch.update(ref, { toplamPuan: firebase.firestore.FieldValue.increment(pts), galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc), macSayisi: firebase.firestore.FieldValue.increment(1) });
+                // SADECE TEKLER PUANINA EKLE
+                batch.update(ref, { 
+                    toplamPuan: firebase.firestore.FieldValue.increment(pts), 
+                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc), 
+                    macSayisi: firebase.firestore.FieldValue.increment(1) 
+                });
             }
         };
 
-        // Kaptanlara ve (varsa) partnerlere puanları dağıt
+        // Oyunculara (ve varsa partnerlerine) puanları dağıt
         updateStats(wid, true); 
         updateStats(lid, false);
         if (m.macFormati === 'Çiftler') { 
             updateStats(wPartnerId, true); 
             updateStats(lPartnerId, false); 
         }
-        // -----------------------------------------
 
         const matchRef = db.collection('matches').doc(id);
         batch.update(matchRef, { durum: 'Tamamlandı', kayitliKazananID: wid });
 
         try {
             await batch.commit();
+            // Turnuva tur atlatma/grup güncelleme tetikleyicisi
             if (m.tournamentId && m.matchTag) {
-    await advanceTournamentBracket(m.tournamentId, m.matchTag, wid);
-}
+                await advanceTournamentBracket(m.tournamentId, m.matchTag, wid);
+            }
             await checkAndGrantBadges(wid); await checkAndGrantBadges(lid);
-            alert("✅ Maç onaylandı ve puanlar işlendi!"); 
+            alert("✅ Maç onaylandı ve puanlar doğru haneye işlendi!"); 
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#c06035', '#ffffff', '#28a745'] });
             goBackToList(); loadLeaderboard();
         } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
@@ -2522,43 +2534,89 @@ submitChallengeBtn.addEventListener('click', async () => {
     };
 
     // --- YÖNETİCİ: TURNUVAYI VE BAĞLI MAÇLARI TAMAMEN SİLME ---
+ // --- YÖNETİCİ: TURNUVAYI VE PUANLARI SİLME (GÜNCELLENDİ) ---
     window.deleteTournament = async function(tourId) {
-        if(!confirm("⚠️ DİKKAT: Bu turnuvayı tamamen iptal etmek ve silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz. Kura çekilmişse, oluşturulan tüm maçlar da sistemden silinecektir!")) return;
+        if(!confirm("⚠️ DİKKAT: Bu turnuvayı silmek istediğinize emin misiniz?\n\nBu işlem oyuncuların bu turnuvadan kazandığı PUANLARI da geri alacaktır!")) return;
         
-        const verification = prompt("Silme işlemini onaylamak için kutuya 'İPTAL' yazın:"); 
-        if (verification !== 'İPTAL') { 
-            alert("Güvenlik onayı başarısız. İşlem iptal edildi."); 
-            return; 
-        }
+        const verification = prompt("Silme işlemini onaylamak için 'İPTAL' yazın:"); 
+        if (verification !== 'İPTAL') return alert("İşlem iptal edildi.");
 
         try {
-            // Ekranda bekleme efekti
-            document.getElementById('tournament-detail-view').innerHTML = '<p style="text-align:center; margin-top:50px;">Turnuva ve bağlı maçlar siliniyor, lütfen bekleyin... ⏳</p>';
+            document.getElementById('tournament-detail-view').innerHTML = '<p style="text-align:center; margin-top:50px;">Puanlar geri alınıyor ve turnuva siliniyor... ⏳</p>';
 
             const batch = db.batch();
-
-            // 1. Önce bu turnuvaya ait açılmış "Lig Maçlarını" (Fikstürü) bul ve sil
+            
+            // 1. Turnuvaya ait TÜM maçları getir
             const matchSnap = await db.collection('matches').where('tournamentId', '==', tourId).get();
-            matchSnap.forEach(doc => {
-                batch.delete(doc.ref);
-            });
+            
+            for (const doc of matchSnap.docs) {
+                const m = doc.data();
+                
+                // Eğer maç tamamlanmışsa puanları geri hesapla
+                if (m.durum === 'Tamamlandı' && m.kayitliKazananID) {
+                    const wid = m.kayitliKazananID;
+                    const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+                    
+                    // Çiftler partnerlerini bul
+                    let wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+                    let lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
 
-            // 2. Turnuva dökümanının kendisini sil
+                    // Kazanılan puanı hesapla (finalizeMatch'in tersi)
+                    let wg = 0, lg = 0;
+                    if (m.skor) {
+                        const s = m.skor;
+                        const isEntryByWinner = m.sonucuGirenID === wid;
+                        const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0);
+                        const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0);
+                        const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0);
+                        const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
+                        wg = s1w + s2w; lg = s1l + s2l;
+                    }
+                    
+                    const pointsToSubtractW = -(50 + (wg * 5)); // Galibin puanını eksi olarak hazırla
+                    const pointsToSubtractL = -(50 + (lg * 5)); // Mağlubun puanını eksi olarak hazırla
+
+                    // Puanları geri çekme fonksiyonu
+                    const reverseStats = (uid, pts, isWin) => {
+                        if (!uid) return;
+                        const userRef = db.collection('users').doc(uid);
+                        if (m.macFormati === 'Çiftler') {
+                            batch.update(userRef, { ciftlerPuani: firebase.firestore.FieldValue.increment(pts) });
+                        } else {
+                            batch.update(userRef, { 
+                                toplamPuan: firebase.firestore.FieldValue.increment(pts),
+                                galibiyetSayisi: firebase.firestore.FieldValue.increment(isWin ? -1 : 0),
+                                macSayisi: firebase.firestore.FieldValue.increment(-1)
+                            });
+                        }
+                    };
+
+                    reverseStats(wid, pointsToSubtractW, true);
+                    reverseStats(lid, pointsToSubtractL, false);
+                    if (m.macFormati === 'Çiftler') {
+                        reverseStats(wPartnerId, pointsToSubtractW, true);
+                        reverseStats(lPartnerId, pointsToSubtractL, false);
+                    }
+                }
+                
+                // Maç dökümanını sil
+                batch.delete(doc.ref);
+            }
+
+            // 2. Turnuva dökümanını sil
             const tourRef = db.collection('tournaments').doc(tourId);
             batch.delete(tourRef);
 
-            // 3. Değişiklikleri topluca veritabanına uygula (Batch Commit)
             await batch.commit();
 
-            alert("Turnuva ve tüm bağlantılı maçlar başarıyla yok edildi. 🗑️");
-            
-            // 4. Ana listeye geri dön ve listeyi yenile
+            alert("Turnuva silindi ve tüm puanlar başarıyla geri alındı! 🗑️");
             document.getElementById('tournament-detail-view').style.display = 'none';
             document.getElementById('tournament-list-view').style.display = 'block';
             loadTournaments();
             
         } catch(e) {
-            alert("Silme işlemi sırasında kritik hata oluştu: " + e.message);
+            alert("Hata: " + e.message);
+            console.error(e);
         }
     };
 
@@ -2716,12 +2774,27 @@ submitChallengeBtn.addEventListener('click', async () => {
     }
 
     // --- 4. MAÇ DÖKÜMANI OLUŞTURUCU VE KURA ÇEKİMİ ---
+// --- 4. YARDIMCI: TURNUVA MAÇI DÖKÜMANI OLUŞTURUCU ---
     async function createTournamentMatchDoc(tourId, p1, p2, roundName, matchTag) {
         if(!p1 || !p2 || p1.isBye || p2.isBye) return null;
+        
+        // YENİ: Turnuvanın formatını (Tekler / Çiftler) öğreniyoruz
+        const tourSnap = await db.collection('tournaments').doc(tourId).get();
+        const format = tourSnap.exists ? tourSnap.data().format : 'Tekler';
+
         const matchRef = await db.collection('matches').add({
-            tournamentId: tourId, roundName: roundName, matchTag: matchTag,
-            oyuncu1ID: p1.p1, oyuncu1PartnerID: p1.p2, oyuncu2ID: p2.p1, oyuncu2PartnerID: p2.p2,
-            macFormati: 'Turnuva', macTipi: 'Turnuva', bahisPuani: 0, durum: 'Hazır', tarih: firebase.firestore.FieldValue.serverTimestamp()
+            tournamentId: tourId, 
+            roundName: roundName, 
+            matchTag: matchTag,
+            oyuncu1ID: p1.p1, 
+            oyuncu1PartnerID: p1.p2, 
+            oyuncu2ID: p2.p1, 
+            oyuncu2PartnerID: p2.p2,
+            macFormati: format, // 'Turnuva' yazan yeri gerçek format ile değiştirdik
+            macTipi: 'Turnuva', 
+            bahisPuani: 0, 
+            durum: 'Hazır', 
+            tarih: firebase.firestore.FieldValue.serverTimestamp()
         });
         return matchRef.id;
     }
