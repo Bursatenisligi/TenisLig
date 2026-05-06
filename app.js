@@ -1111,7 +1111,7 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         } catch (error) { console.error("İstatistik hatası:", error); document.getElementById('stats-form-badges').innerHTML = '<span style="color:red; font-size:0.8em;">Veri alınamadı</span>'; }
     }
 
-    function showMatchDetail(matchDocId) {
+function showMatchDetail(matchDocId) {
         tabSections.forEach(s => s.style.display = 'none'); matchDetailView.style.display = 'block'; currentMatchDocId = matchDocId;
         if(matchUploadPreview) { matchUploadPreview.style.display='none'; matchUploadPreview.src=''; }
         if(matchResultPhotoInput) { matchResultPhotoInput.value = ''; }
@@ -1120,27 +1120,23 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
 
         const currentUserID = auth.currentUser.uid;
 
-        db.collection('matches').doc(matchDocId).get().then(doc => {
+        // EKSİK OLAN KISIM BURASIYDI: "async" ekledik ve değişkenleri tanımladık
+        db.collection('matches').doc(matchDocId).get().then(async doc => {
             const match = doc.data();
+            
+            // 1. KİMLİK KONTROLLERİ (Hatanın Çözüldüğü Yer)
+            const isParticipant = (currentUserID === match.oyuncu1ID || currentUserID === match.oyuncu2ID || currentUserID === match.oyuncu1PartnerID || currentUserID === match.oyuncu2PartnerID);
+            
             let isTourAdmin = false;
-if (match.tournamentId) {
-    // tournamentId'yi maç oluştururken eklemiş olmalıyız
-    // Eğer eklemediysek, turnuva verisinden kontrol edilir
-    isTourAdmin = (currentUserID === tournamentCreatorId); 
-}
+            if (match.tournamentId) {
+                try {
+                    const tourSnap = await db.collection('tournaments').doc(match.tournamentId).get();
+                    if (tourSnap.exists && tourSnap.data().creatorId === currentUserID) {
+                        isTourAdmin = true;
+                    }
+                } catch(e) { console.error("Turnuva admini kontrol edilirken hata:", e); }
+            }
 
-// ARTIK KRİTİK YETKİ KONTROLÜ:
-if (isParticipant || isTourAdmin) {
-    // Organizatör de tıpkı oyuncu gibi skor girebilir veya onaylayabilir!
-    if (match.durum === 'Hazır') {
-        scoreInputSection.style.display = 'block'; 
-        // ... Skor giriş formunu göster
-    }
-    if (match.durum === 'Sonuç_Bekleniyor') {
-        scoreDisplaySection.style.display = 'block';
-        // ... Onay butonlarını göster
-    }
-}
             const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
             const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
             
@@ -1191,7 +1187,8 @@ if (isParticipant || isTourAdmin) {
                 } else { chatFromMatchBtn.style.display = 'none'; }
             }
             
-            if (!isParticipant) {
+            // 2. YETKİ KONTROLÜ İLE BUTONLARI GÖSTER (Oyuncu veya Admin)
+            if (!isParticipant && !isTourAdmin) {
                 if (match.durum === 'Sonuç_Bekleniyor' || match.durum === 'Tamamlandı') {
                     const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
                     let resText = match.durum === 'Tamamlandı' ? `<p style="color:green;">Kazanan: ${userMap[match.kayitliKazananID]?.isim}</p>` : `<p style="color:orange;">Sonuç Onayı Bekleniyor</p>`;
@@ -1207,59 +1204,26 @@ if (isParticipant || isTourAdmin) {
 
             if (match.durum === 'Bekliyor') {
                 if (currentUserID === match.oyuncu2ID) {
-                    
-                    // --- EKLENEN ÇİFTLER PARTNER SEÇİM KUTUSU ---
                     if (match.macFormati === 'Çiftler') {
-                        const label = document.createElement('label');
-                        label.textContent = "Takım Arkadaşın (Partnerin):";
-                        label.className = "input-label";
-                        label.style.marginTop = "0";
-                        
-                        const s = document.createElement('select'); 
-                        s.id = 'accept-challenge-partner'; 
-                        s.style.marginBottom = '15px';
-                        s.innerHTML = '<option value="">Partnerini Seç</option>';
-                        
-                        Object.values(userMap).forEach(p => { 
-                            if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) {
-                                s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; 
-                            }
-                        });
-                        actionButtonsContainer.appendChild(label);
-                        actionButtonsContainer.appendChild(s);
+                        const label = document.createElement('label'); label.textContent = "Takım Arkadaşın (Partnerin):"; label.className = "input-label"; label.style.marginTop = "0";
+                        const s = document.createElement('select'); s.id = 'accept-challenge-partner'; s.style.marginBottom = '15px'; s.innerHTML = '<option value="">Partnerini Seç</option>';
+                        Object.values(userMap).forEach(p => { if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) { s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; } });
+                        actionButtonsContainer.appendChild(label); actionButtonsContainer.appendChild(s);
                     }
-                    // ---------------------------------------------
-                    
-                const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
+                    const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
                     ab.onclick = async () => {
                         let partnerID = null;
                         if (match.macFormati === 'Çiftler') {
                             const pSelect = document.getElementById('accept-challenge-partner');
-                            if (!pSelect.value) return alert("Lütfen partnerini seç!");
-                            partnerID = pSelect.value;
+                            if (!pSelect.value) return alert("Lütfen partnerini seç!"); partnerID = pSelect.value;
                         }
-                        
                         try {
-                            // 1. Veritabanını Güncelle
-                            await db.collection('matches').doc(matchDocId).update({ 
-                                durum: 'Hazır', 
-                                oyuncu2PartnerID: partnerID 
-                            });
-                            
-                            // 2. Rakibe Mail Bildirimi Gönder
-                            const myName = userMap[currentUserID]?.isim || 'Rakibin';
-                            const subject = "✅ Maç Teklifin Kabul Edildi!";
+                            await db.collection('matches').doc(matchDocId).update({ durum: 'Hazır', oyuncu2PartnerID: partnerID });
+                            const myName = userMap[currentUserID]?.isim || 'Rakibin'; const subject = "✅ Maç Teklifin Kabul Edildi!";
                             const body = `<p><strong>${myName}</strong> maç teklifini kabul etti!</p><p>Hemen uygulamaya girip maç tarihini ve kortu belirleyebilirsiniz.</p><p><a href="https://bursatenisligi.github.io/TenisLig/">Uygulamaya Git</a></p>`;
-                            
-                            // Maili oyuncu 1'e (teklifi atan kişiye) gönderiyoruz
                             sendNotificationEmail(match.oyuncu1ID, subject, body);
-
-                            alert("Kabul edildi! Rakibine mail bildirimi gönderildi. 📨"); 
-                            goBackToList();
-                        } catch (err) {
-                            console.error(err);
-                            alert("Kabul edilirken hata oluştu: " + err.message);
-                        }
+                            alert("Kabul edildi! Rakibine mail bildirimi gönderildi. 📨"); goBackToList();
+                        } catch (err) { console.error(err); alert("Kabul edilirken hata oluştu: " + err.message); }
                     };
                     const rb = document.createElement('button'); rb.textContent = 'Reddet ❌'; rb.className = 'btn-reject'; rb.onclick = () => deleteMatch(matchDocId, "Reddedildi."); 
                     actionButtonsContainer.append(ab, rb);
@@ -1300,9 +1264,9 @@ if (isParticipant || isTourAdmin) {
                             <label class="input-label" style="color:#856404;">Hangi zeminde oynadınız?</label>
                             <select id="score-court-type" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e6dbb9;"><option value="Toprak" ${match.kortTipi === 'Toprak' ? 'selected' : ''}>Toprak 🧱</option><option value="Sert" ${match.kortTipi === 'Sert' ? 'selected' : ''}>Sert 🟦</option></select>
                          </div>
-                         <div class="score-row"><span>1. Set</span><input type="number" id="s1-me" class="score-box" placeholder="Ben" value="${match.skor?.s1_me || ''}"><input type="number" id="s1-opp" class="score-box" placeholder="Rakip" value="${match.skor?.s1_opp || ''}"></div>
-                        <div class="score-row"><span>2. Set</span><input type="number" id="s2-me" class="score-box" placeholder="Ben" value="${match.skor?.s2_me || ''}"><input type="number" id="s2-opp" class="score-box" placeholder="Rakip" value="${match.skor?.s2_opp || ''}"></div>
-                        <div class="score-row"><span>3. Set (Opsiyonel)</span><input type="number" id="s3-me" class="score-box" placeholder="Ben" value="${match.skor?.s3_me || ''}"><input type="number" id="s3-opp" class="score-box" placeholder="Rakip" value="${match.skor?.s3_opp || ''}"></div>
+                         <div class="score-row"><span>1. Set</span><input type="number" id="s1-me" class="score-box" placeholder="P1" value="${match.skor?.s1_me || ''}"><input type="number" id="s1-opp" class="score-box" placeholder="P2" value="${match.skor?.s1_opp || ''}"></div>
+                        <div class="score-row"><span>2. Set</span><input type="number" id="s2-me" class="score-box" placeholder="P1" value="${match.skor?.s2_me || ''}"><input type="number" id="s2-opp" class="score-box" placeholder="P2" value="${match.skor?.s2_opp || ''}"></div>
+                        <div class="score-row"><span>3. Set (Opsiyonel)</span><input type="number" id="s3-me" class="score-box" placeholder="P1" value="${match.skor?.s3_me || ''}"><input type="number" id="s3-opp" class="score-box" placeholder="P2" value="${match.skor?.s3_opp || ''}"></div>
                         <div id="winner-select-container" style="margin-top: 15px; margin-bottom: 10px;"><label style="font-size:0.85em; color:#856404; font-weight:bold; margin-bottom:5px; display:block;">Kazanan Kim?</label></div>
                         <button id="dynamic-save-score-btn" class="btn-save" style="margin-top:5px; background-color:#28a745;">Sonucu Kaydet ve Gönder 🚀</button>
                     </div>`;
@@ -1316,14 +1280,15 @@ if (isParticipant || isTourAdmin) {
             }
             else if (match.durum === 'Sonuç_Bekleniyor') {
                 const s = match.skor || {};
-                if (match.sonucuGirenID !== currentUserID) {
+                // Admin VEYA skoru giren kişi değilse onay ekranını görsün
+                if (isTourAdmin || match.sonucuGirenID !== currentUserID) {
                     const myS1 = s.s1_opp || 0; const oppS1 = s.s1_me || 0; const myS2 = s.s2_opp || 0; const oppS2 = s.s2_me || 0; const myS3 = s.s3_opp || 0; const oppS3 = s.s3_me || 0;
-                    const isWinnerMe = match.adayKazananID === currentUserID; const p1Val = match.oyuncu1ID; const p2Val = match.oyuncu2ID;
+                    const p1Val = match.oyuncu1ID; const p2Val = match.oyuncu2ID;
 
                     scoreDisplaySection.style.display = 'block';
                     scoreDisplaySection.innerHTML = `
                         <div style="background:#e3f2fd; padding:15px; border-radius:10px; border:1px solid #bbdefb; text-align:center;">
-                            <h4 style="margin-top:0; color:#0d47a1;">📬 Rakibin Skor Girdi</h4>
+                            <h4 style="margin-top:0; color:#0d47a1;">📬 Skor Onayı Bekleniyor</h4>
                             <div style="font-size:1.2em; font-weight:bold; margin-bottom:10px;">${oppS1}-${myS1}, ${oppS2}-${myS2} ${s.s3_me || s.s3_opp ? `, ${oppS3}-${myS3}` : ''}</div>
                             <div style="font-size:0.9em; color:#555; margin-bottom:15px;">Kazanan Adayı: <strong>${userMap[match.adayKazananID]?.isim || 'Bilinmiyor'}</strong></div>
                             <button id="btn-toggle-approve" class="btn-main" style="background-color:#007bff; width:100%;">⚖️ Skoru İncele / Onayla / Değiştir</button>
@@ -1350,14 +1315,14 @@ if (isParticipant || isTourAdmin) {
                     scoreDisplaySection.innerHTML = `
                         <div style="background:#fff3cd; padding:15px; border-radius:10px; border:1px solid #ffeeba; text-align:center;">
                             <h4 style="margin:0; color:#856404;">⏳ Onay Bekleniyor</h4>
-                            <p style="margin:5px 0; font-size:0.9em;">Rakibin (${userMap[match.oyuncu1ID === currentUserID ? match.oyuncu2ID : match.oyuncu1ID]?.isim}) sonucu onaylaması veya düzenlemesi bekleniyor.</p>
+                            <p style="margin:5px 0; font-size:0.9em;">Rakibin veya Turnuva Yönetiminin sonucu onaylaması bekleniyor.</p>
                             <div style="font-weight:bold; margin-top:10px;">Girilen Skor: ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}</div>
                         </div>`;
                 }
             }
             else if (match.durum === 'Tamamlandı') {
                 const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
-                scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px;"><p>${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}, ${s.s3_me}-${s.s3_opp}</p><p>Kazanan: ${userMap[match.kayitliKazananID]?.isim}</p></div>`;
+                scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${userMap[match.kayitliKazananID]?.isim}</strong></p></div>`;
             }
 
             const shareMatchBtn = document.getElementById('btn-share-match-detail');
@@ -1389,6 +1354,9 @@ if (isParticipant || isTourAdmin) {
                     setTimeout(() => { if(document.body.contains(tempDiv)) document.body.removeChild(tempDiv); }, 1000);
                 });
             }
+        }).catch(err => {
+            console.error("Match yüklenirken hata:", err);
+            detailMatchInfo.innerHTML = '<p style="color:red;">Maç detayları yüklenirken bir hata oluştu.</p>';
         });
     }
 
