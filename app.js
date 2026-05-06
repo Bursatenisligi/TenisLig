@@ -1122,7 +1122,25 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
 
         db.collection('matches').doc(matchDocId).get().then(doc => {
             const match = doc.data();
-            const isParticipant = (currentUserID === match.oyuncu1ID || currentUserID === match.oyuncu2ID);
+            let isTourAdmin = false;
+if (match.tournamentId) {
+    // tournamentId'yi maç oluştururken eklemiş olmalıyız
+    // Eğer eklemediysek, turnuva verisinden kontrol edilir
+    isTourAdmin = (currentUserID === tournamentCreatorId); 
+}
+
+// ARTIK KRİTİK YETKİ KONTROLÜ:
+if (isParticipant || isTourAdmin) {
+    // Organizatör de tıpkı oyuncu gibi skor girebilir veya onaylayabilir!
+    if (match.durum === 'Hazır') {
+        scoreInputSection.style.display = 'block'; 
+        // ... Skor giriş formunu göster
+    }
+    if (match.durum === 'Sonuç_Bekleniyor') {
+        scoreDisplaySection.style.display = 'block';
+        // ... Onay butonlarını göster
+    }
+}
             const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
             const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
             
@@ -2245,43 +2263,55 @@ submitChallengeBtn.addEventListener('click', async () => {
         });
     }
 
-    // Detay sayfası iskeleti (Hata almamak için şimdilik boş tanımlıyoruz)
-    // --- TURNUVA DETAY VE KAYIT İŞLEMLERİ ---
-    window.openTournamentDetail = function(tourId, tourData) {
-        document.getElementById('tournament-list-view').style.display = 'none';
-        document.getElementById('tournament-detail-view').style.display = 'block';
-        document.getElementById('detail-tour-name').textContent = tourData.name;
+    
+// --- TURNUVA DETAY GÜNCELLEMESİ (LİSTE VE ADMİN KAYIT) ---
+window.openTournamentDetail = function(tourId, tourData) {
+    document.getElementById('tournament-list-view').style.display = 'none';
+    document.getElementById('tournament-detail-view').style.display = 'block';
+    document.getElementById('detail-tour-name').textContent = tourData.name;
 
-        const myUid = auth.currentUser.uid;
-        const isAdmin = (tourData.creatorId === myUid);
+    const myUid = auth.currentUser.uid;
+    const isAdmin = (tourData.creatorId === myUid);
+    
+    // 1. Kayıt/Katılım Alanı ve LİSTEYİ GÖSTERME
+    renderRegistrationArea(tourId, tourData, myUid);
+
+    // 2. Yönetici (Admin) Paneli
+    const adminArea = document.getElementById('tour-admin-manage-area');
+    if (isAdmin) {
+        adminArea.style.display = 'block';
+        adminArea.innerHTML = `
+            <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px;">+ Manuel Oyuncu Ekle</button>
+                ${tourData.status === 'Kayıt' 
+                    ? `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px;">Kayıtları Kapat 🔒</button>`
+                    : `<button id="btn-reopen-registration" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px;">Kayıtları Tekrar Aç 🔓</button>`
+                }
+            </div>
+            <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
+                <label class="input-label">Oyuncu 1</label>
+                <select id="admin-p1-select"></select>
+                ${tourData.format === 'Çiftler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
+                <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
+            </div>
+        `;
         
-        // 1. Kayıt ve Durum Alanı
-        renderRegistrationArea(tourId, tourData, myUid);
+        // Admin Manuel Ekleme Formu Kontrolü
+        document.getElementById('btn-admin-add-player').onclick = () => {
+            const form = document.getElementById('admin-manual-add-form');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            populateAdminPlayerSelects(tourData);
+        };
 
-// 2. Yönetici (Admin) Paneli
-        const adminArea = document.getElementById('tour-admin-manage-area');
-        if (isAdmin) {
-            adminArea.style.display = 'block';
-            if (tourData.status === 'Kayıt') {
-                adminArea.innerHTML = `
-                    <h4 style="margin-top:0; color:#856404;">🛠️ Turnuva Yönetimi</h4>
-                    <p style="font-size:0.9em; margin-bottom:10px;">Toplam Kayıt: <strong>${tourData.participants ? tourData.participants.length : 0}</strong></p>
-                    <button id="btn-close-registration" class="btn-main" style="background:#dc3545;">Kayıtları Kapat ve Kura Çekimine Geç 🔒</button>
-                `;
-                document.getElementById('btn-close-registration').onclick = () => closeRegistration(tourId, tourData);
-            } else if (tourData.status === 'Format_Secimi') {
-                adminArea.innerHTML = `
-                    <h4 style="margin-top:0; color:#856404;">🎲 Kura Çekimi</h4>
-                    <p style="font-size:0.9em; margin-bottom:10px;">Turnuvayı başlatmak üzeresiniz.</p>
-                    <button id="btn-generate-knockout" class="btn-main" style="background:#6f42c1;">Eleme Usulü Kura Çek (Ağaç Oluştur) 🎾</button>
-                `;
-                document.getElementById('btn-generate-knockout').onclick = () => generateKnockoutDraw(tourId, tourData);
-            } else {
-                adminArea.innerHTML = `<p style="color:#28a745; font-weight:bold; margin:0;">Turnuva Devam Ediyor 🏆</p>`;
-            }
-        } else {
-            adminArea.style.display = 'none';
-        }
+        const btnCloseReg = document.getElementById('btn-close-registration');
+        if (btnCloseReg) btnCloseReg.onclick = () => closeRegistration(tourId, tourData);
+        
+        const btnReopen = document.getElementById('btn-reopen-registration');
+        if (btnReopen) btnReopen.onclick = () => updateTournamentStatus(tourId, 'Kayıt');
+    } else {
+        adminArea.style.display = 'none';
+    }
 
         // 3. Eşleşme (Bracket) Ağacı
         const bracketContainer = document.getElementById('tour-bracket-container');
@@ -2293,57 +2323,93 @@ submitChallengeBtn.addEventListener('click', async () => {
     };
 
     // Kayıt Alanını Ekrana Çizen Yardımcı Fonksiyon
+    // --- KATILIMCI LİSTESİ VE KAYIT ALANI RENDER FONKSİYONU ---
     function renderRegistrationArea(tourId, tourData, myUid) {
         const regArea = document.getElementById('tour-registration-area');
+        if (!regArea) return;
+
         const participants = tourData.participants || [];
+        const isAdmin = (tourData.creatorId === myUid);
         
-        let myRegistration = participants.find(p => p.p1 === myUid || p.p2 === myUid);
-        
-        if (tourData.status !== 'Kayıt') {
-            let html = `<p style="text-align:center; color:#856404; font-weight:bold;">Kayıtlar Kapalı</p>`;
-            if (myRegistration) html += `<p style="text-align:center; color:#28a745;">Bu turnuvada yarışıyorsun! Başarılar 🎾</p>`;
-            regArea.innerHTML = html;
-            return;
+        // 1. ÜST BİLGİ VE LİSTE BAŞLIĞI
+        let html = `
+            <div style="text-align:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                <p style="margin:5px 0;"><strong>Format:</strong> ${tourData.format} | <strong>Ücret:</strong> ${tourData.fee} Puan</p>
+            </div>
+            <h4 style="margin-top:0; border:none; font-size:1em; color:#333;">👥 Katılımcı Listesi (${participants.length})</h4>
+        `;
+
+        // 2. KATILIMCI LİSTESİNİ OLUŞTURMA
+        if (participants.length === 0) {
+            html += `<p style="text-align:center; color:#999; font-size:0.9em; padding:10px;">Henüz kayıtlı oyuncu yok.</p>`;
+        } else {
+            html += `<div class="tour-participants-list" style="margin-bottom:20px; max-height:200px; overflow-y:auto;">`;
+            participants.forEach((p, index) => {
+                const p1Name = userMap[p.p1]?.isim || 'Bilinmeyen';
+                const p2Name = p.p2 ? ` & ${userMap[p.p2]?.isim || 'Bilinmeyen'}` : '';
+                
+                html += `
+                    <div class="modern-list-item" style="padding:10px; margin-bottom:5px; border-left:4px solid #c06035; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-size:0.9em; font-weight:600; color:#444;">
+                            ${index + 1}. ${p1Name}${p2Name}
+                        </div>
+                        ${isAdmin ? `
+                            <button onclick="adminDeleteParticipant('${tourId}', ${index})" 
+                                    style="width:auto; background:none; color:#dc3545; margin:0; padding:5px; box-shadow:none; font-size:1.2em;">
+                                🗑️
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            html += `</div>`;
         }
 
-        let html = `<div style="text-align:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
-            <p style="margin:5px 0;"><strong>Format:</strong> ${tourData.format}</p>
-            <p style="margin:5px 0;"><strong>Katılım Bedeli:</strong> ${tourData.fee} Puan</p>
-        </div>`;
+        // 3. KULLANICI ETKİLEŞİM BUTONLARI (Kayıt Ol / İptal Et)
+        const myRegistration = participants.find(p => p.p1 === myUid || p.p2 === myUid);
 
-        if (myRegistration) {
-            let partnerText = '';
-            if (tourData.format === 'Çiftler' && myRegistration.p2) {
-                const partnerName = userMap[myRegistration.p2 === myUid ? myRegistration.p1 : myRegistration.p2]?.isim || 'Partner';
-                partnerText = `<br><span style="font-size:0.9em; color:#555;">Takım Arkadaşın: <strong>${partnerName}</strong></span>`;
-            }
+        if (tourData.status !== 'Kayıt') {
+            html += `<div style="background:#fff3cd; padding:10px; border-radius:8px; text-align:center; color:#856404; font-weight:bold;">
+                        🔒 Kayıtlar Kapandı
+                    </div>`;
+        } 
+        else if (myRegistration) {
+            // Kullanıcı zaten kayıtlıysa
             html += `
-                <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center; border:1px solid #c3e6cb;">
-                    <span style="font-size:2.5em; display:block; margin-bottom:10px;">✅</span>
-                    <h4 style="color:#28a745; margin:0 0 5px 0;">Turnuvaya Kayıtlısın!</h4>
-                    <p style="font-size:0.85em; color:#555; margin-bottom:15px;">Kura çekimini bekle... ${partnerText}</p>
-                    <button id="btn-cancel-tour-reg" class="btn-main" style="background:#dc3545; width:auto; padding:8px 20px;">Kaydımı İptal Et ❌</button>
+                <div style="background:#e8f5e9; padding:15px; border-radius:12px; text-align:center; border:1px solid #c3e6cb;">
+                    <p style="color:#28a745; font-weight:bold; margin-bottom:10px;">✅ Turnuvaya Kayıtlısınız</p>
+                    <button id="btn-cancel-tour-reg" class="btn-main" style="background:#dc3545; width:auto; padding:8px 20px;">Kaydı İptal Et ❌</button>
                 </div>
             `;
             regArea.innerHTML = html;
             document.getElementById('btn-cancel-tour-reg').onclick = () => cancelTournamentRegistration(tourId, myRegistration);
-        } else {
+        } 
+        else {
+            // Kullanıcı kayıtlı değilse ve kayıtlar açıksa
+            let partnerSelectHTML = '';
             if (tourData.format === 'Çiftler') {
-                html += `
-                    <label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşın (Partnerin)</label>
+                partnerSelectHTML = `
+                    <label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label>
                     <select id="tour-partner-select" style="margin-bottom:15px;">
-                        <option value="">Lütfen Partner Seçin</option>
+                        <option value="">Lütfen Bir Partner Seçin</option>
                     </select>
                 `;
             }
-            html += `<button id="btn-join-tour" class="btn-save" style="background:#28a745; font-size:1.1em; padding:15px;">Hemen Kayıt Ol 🎾</button>`;
+
+            html += `
+                <div style="background:#f8f9fa; padding:15px; border-radius:12px; border:1px solid #eee;">
+                    ${partnerSelectHTML}
+                    <button id="btn-join-tour" class="btn-save" style="background:#28a745; margin-top:5px;">Turnuvaya Katıl 🎾</button>
+                </div>
+            `;
             regArea.innerHTML = html;
 
+            // Çiftler için partner listesini doldur (Kayıtlı olmayanları filtreler)
             if (tourData.format === 'Çiftler') {
                 const selectEl = document.getElementById('tour-partner-select');
                 Object.values(userMap).forEach(player => {
-                    const isAlreadyRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
-                    if (player.uid !== myUid && !isAlreadyRegistered) {
+                    const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
+                    if (player.uid !== myUid && !isOtherRegistered) {
                         const opt = document.createElement('option');
                         opt.value = player.uid;
                         opt.textContent = player.isim || player.email;
@@ -2355,30 +2421,28 @@ submitChallengeBtn.addEventListener('click', async () => {
         }
     }
 
-    // --- VERİTABANI: KAYIT EKLEME FONKSİYONU ---
-    async function joinTournament(tourId, tourData, myUid) {
-        const me = userMap[myUid];
-        if (me.toplamPuan < tourData.fee) {
-            return alert(`Bu turnuvaya katılmak için en az ${tourData.fee} puana ihtiyacın var.`);
-        }
-        let newRegistration = { p1: myUid, p2: null };
-        if (tourData.format === 'Çiftler') {
-            const partnerId = document.getElementById('tour-partner-select').value;
-            if (!partnerId) return alert("Çiftler turnuvası için lütfen listeden bir partner seçin!");
-            newRegistration.p2 = partnerId;
-        }
+    // --- YARDIMCI: ORGANİZATÖRÜN KAYIT SİLME FONKSİYONU ---
+    window.adminDeleteParticipant = async function(tourId, index) {
+        if (!confirm("Bu oyuncuyu/takımı turnuvadan çıkarmak istediğinize emin misiniz?")) return;
+        
         try {
-            document.getElementById('btn-join-tour').disabled = true;
-            document.getElementById('btn-join-tour').textContent = 'Kayıt Yapılıyor... ⏳';
-            await db.collection('tournaments').doc(tourId).update({ participants: firebase.firestore.FieldValue.arrayUnion(newRegistration) });
-            alert("Kayıt başarılı! 🏆 Turnuva heyecanına ortak oldun.");
-            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
-            openTournamentDetail(tourId, updatedDoc.data());
-        } catch(e) {
-            console.error("Kayıt hatası:", e); alert("Kayıt sırasında bir hata oluştu: " + e.message);
-            document.getElementById('btn-join-tour').disabled = false;
+            const docRef = db.collection('tournaments').doc(tourId);
+            const doc = await docRef.get();
+            let currentParticipants = doc.data().participants || [];
+            
+            // Belirli indexteki kaydı diziden çıkar
+            currentParticipants.splice(index, 1);
+            
+            await docRef.update({ participants: currentParticipants });
+            alert("Kayıt başarıyla silindi. 🗑️");
+            
+            // Sayfayı yenile
+            const updatedTour = await docRef.get();
+            openTournamentDetail(tourId, updatedTour.data());
+        } catch (e) {
+            alert("Silme hatası: " + e.message);
         }
-    }
+    };
 
     // --- VERİTABANI: KAYIT İPTAL FONKSİYONU ---
     async function cancelTournamentRegistration(tourId, registrationObj) {
@@ -2753,7 +2817,34 @@ submitChallengeBtn.addEventListener('click', async () => {
             container.appendChild(roundDiv);
         });
     }
+async function adminAddParticipant(tourId) {
+    const p1 = document.getElementById('admin-p1-select').value;
+    const p2 = document.getElementById('admin-p2-select')?.value || null;
 
+    if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
+
+    try {
+        await db.collection('tournaments').doc(tourId).update({
+            participants: firebase.firestore.FieldValue.arrayUnion({ p1, p2 })
+        });
+        alert("Oyuncu/Takım başarıyla eklendi.");
+        loadTournaments(); // Listeyi yenile
+    } catch(e) { alert("Hata: " + e.message); }
+}
+
+// Kayıt silme yetkisi
+window.adminDeleteParticipant = async function(tourId, index) {
+    if(!confirm("Bu kaydı silmek istediğinize emin misiniz?")) return;
+    
+    const doc = await db.collection('tournaments').doc(tourId).get();
+    let parts = doc.data().participants;
+    parts.splice(index, 1); // Belirli sıradaki kaydı sil
+    
+    await db.collection('tournaments').doc(tourId).update({ participants: parts });
+    alert("Kayıt silindi.");
+    // Detay ekranını yenile
+    openTournamentDetail(tourId, (await db.collection('tournaments').doc(tourId).get()).data());
+};
 
 // --- SAFARİ/IOS UYUMLU MANUEL BİLDİRİM İZNİ (GÜNCELLENDİ) ---
     const btnEnablePush = document.getElementById('btn-enable-push');
