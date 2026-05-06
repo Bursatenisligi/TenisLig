@@ -2308,6 +2308,7 @@ submitChallengeBtn.addEventListener('click', async () => {
     // ============================================================================
 
     // --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
+// --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ ---
     window.openTournamentDetail = function(tourId, tourData) {
         const container = document.getElementById('tournament-list-view');
         const detail = document.getElementById('tournament-detail-view');
@@ -2349,6 +2350,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                 }
             }
 
+            // ARAYÜZ: Admin Paneline İPTAL/SİL Butonu Eklendi
             adminArea.innerHTML = `
                 <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
                 <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
@@ -2361,6 +2363,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                     ${tourData.format === 'Çiftler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
                     <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
                 </div>
+                <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
             `;
             
             const btnAdd = document.getElementById('btn-admin-add-player');
@@ -2383,6 +2386,47 @@ submitChallengeBtn.addEventListener('click', async () => {
             renderTournamentBracket(tourId, tourData, myUid); 
         } else {
             document.getElementById('tour-bracket-container').innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Fikstür henüz oluşturulmadı.</p>';
+        }
+    };
+
+    // --- YÖNETİCİ: TURNUVAYI VE BAĞLI MAÇLARI TAMAMEN SİLME ---
+    window.deleteTournament = async function(tourId) {
+        if(!confirm("⚠️ DİKKAT: Bu turnuvayı tamamen iptal etmek ve silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz. Kura çekilmişse, oluşturulan tüm maçlar da sistemden silinecektir!")) return;
+        
+        const verification = prompt("Silme işlemini onaylamak için kutuya 'İPTAL' yazın:"); 
+        if (verification !== 'İPTAL') { 
+            alert("Güvenlik onayı başarısız. İşlem iptal edildi."); 
+            return; 
+        }
+
+        try {
+            // Ekranda bekleme efekti
+            document.getElementById('tournament-detail-view').innerHTML = '<p style="text-align:center; margin-top:50px;">Turnuva ve bağlı maçlar siliniyor, lütfen bekleyin... ⏳</p>';
+
+            const batch = db.batch();
+
+            // 1. Önce bu turnuvaya ait açılmış "Lig Maçlarını" (Fikstürü) bul ve sil
+            const matchSnap = await db.collection('matches').where('tournamentId', '==', tourId).get();
+            matchSnap.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            // 2. Turnuva dökümanının kendisini sil
+            const tourRef = db.collection('tournaments').doc(tourId);
+            batch.delete(tourRef);
+
+            // 3. Değişiklikleri topluca veritabanına uygula (Batch Commit)
+            await batch.commit();
+
+            alert("Turnuva ve tüm bağlantılı maçlar başarıyla yok edildi. 🗑️");
+            
+            // 4. Ana listeye geri dön ve listeyi yenile
+            document.getElementById('tournament-detail-view').style.display = 'none';
+            document.getElementById('tournament-list-view').style.display = 'block';
+            loadTournaments();
+            
+        } catch(e) {
+            alert("Silme işlemi sırasında kritik hata oluştu: " + e.message);
         }
     };
 
