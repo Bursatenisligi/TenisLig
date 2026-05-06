@@ -2552,48 +2552,38 @@ submitChallengeBtn.addEventListener('click', async () => {
             loadLeaderboard(document.getElementById('leaderboard-club-filter').value);
         });
     }
-    // --- SAFARİ/IOS UYUMLU MANUEL BİLDİRİM İZNİ ---
-// --- SAFARİ/IOS UYUMLU MANUEL BİLDİRİM İZNİ (KUSURSUZ VERSİYON) ---
+// --- SAFARİ/IOS UYUMLU MANUEL BİLDİRİM İZNİ (GÜNCELLENDİ) ---
     const btnEnablePush = document.getElementById('btn-enable-push');
     if (btnEnablePush) {
-        btnEnablePush.addEventListener('click', function() {
-            // 1. Cihaz bildirimleri destekliyor mu kontrolü
-            if (!('Notification' in window)) {
-                alert("Hata: Tarayıcınız bildirimleri desteklemiyor. Lütfen uygulamayı Safari üzerinden 'Ana Ekrana Ekle' diyerek yüklediğinizden emin olun.");
-                return;
+        btnEnablePush.addEventListener('click', () => {
+            if (!window.PusherPushNotifications) {
+                return alert("Tarayıcınız veya cihazınız bu bildirim türünü desteklemiyor (PWA olarak ana ekrana eklediğinizden emin olun).");
             }
-
-            // 2. Kullanıcıdan izin isteme (Apple'ın katı kuralı: async KULLANILAMAZ)
-            Notification.requestPermission().then(async (permission) => {
-                if (permission === 'granted') {
-                    btnEnablePush.textContent = "Bağlanıyor... ⏳";
-                    
-                    try {
-                        const registration = await navigator.serviceWorker.ready;
-                        if (!window.PusherPushNotifications) {
-                            alert("Hata: Bildirim kütüphanesi yüklenemedi. İnternetinizi kontrol edip sayfayı yenileyin.");
-                            return;
-                        }
-                        
-                        const beamsClient = new window.PusherPushNotifications.Client({
-                            instanceId: 'b752a69c-c259-4e6e-adcf-d16c8c323ff9',
-                            serviceWorkerRegistration: registration 
-                        });
-                        
-                        await beamsClient.start();
-                        await beamsClient.addDeviceInterest(auth.currentUser.uid);
-                        
-                        alert("Harika! Bildirimler başarıyla açıldı! Artık hiçbir maçı kaçırmayacaksın. 🔔");
-                        btnEnablePush.style.display = 'none';
-                    } catch (error) {
-                        alert("Sistem arka planda bağlanamadı: " + error.message);
+            
+            btnEnablePush.textContent = "Bağlanıyor... ⏳";
+            
+            navigator.serviceWorker.ready.then(registration => {
+                const beamsClient = new window.PusherPushNotifications.Client({
+                    instanceId: 'b752a69c-c259-4e6e-adcf-d16c8c323ff9',
+                    serviceWorkerRegistration: registration 
+                });
+                
+                // Safari Kuralı: İzni ayrı istemiyoruz, doğrudan start() diyoruz. 
+                // Pusher otomatik olarak ekrana "İzin Ver" kutusunu çıkartacak.
+                beamsClient.start()
+                    .then(() => beamsClient.addDeviceInterest(auth.currentUser.uid))
+                    .then(() => {
+                        alert("Harika! Bildirimler başarıyla açıldı. Artık hiçbir maçı kaçırmayacaksın! 🔔");
+                        btnEnablePush.style.display = 'none'; // Başarılı olunca butonu gizle
+                    })
+                    .catch(error => {
+                        console.error("Bildirim açma hatası:", error);
+                        alert("Bağlantı engellendi veya reddedildi: " + error.message);
                         btnEnablePush.textContent = "🔔 Telefona Bildirim Gönder";
-                    }
-                } else {
-                    alert("İzin reddedildi. Lütfen telefonunuzun Ayarlar > Safari (veya Uygulama) bölümünden bildirim izinlerini açın.");
-                }
+                    });
             }).catch(error => {
-                alert("İzin istenirken bir hata oluştu: " + error.message);
+                alert("Servis başlatılamadı: " + error.message);
+                btnEnablePush.textContent = "🔔 Telefona Bildirim Gönder";
             });
         });
         
