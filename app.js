@@ -1465,39 +1465,84 @@ async function finalizeMatch(id, m) {
             goBackToList(); loadLeaderboard();
         } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
     }
+// --- TUR ATLATMA VE GRUP PUANI HESAPLAMA MOTORU ---
 async function advanceTournamentBracket(tourId, matchTag, winnerUid) {
     const tourRef = db.collection('tournaments').doc(tourId);
     const tourSnap = await tourRef.get();
     const data = tourSnap.data();
-    let bracket = data.bracket;
 
-    // matchTag formatı: "R0_M4" (0. round, 4. maç)
-    const parts = matchTag.split('_');
-    const rIdx = parseInt(parts[0].replace('R',''));
-    const mIdx = parseInt(parts[1].replace('M',''));
+    // --- 1. DURUM: GRUP MAÇI (GROUP STAGE) İŞLEMLERİ ---
+    if (matchTag.startsWith('G')) {
+        let groups = data.groups;
+        
+        // G0_M1 formatından grup ve maç indeksini çıkar
+        const parts = matchTag.split('_');
+        const gIdx = parseInt(parts[0].replace('G',''));
+        const group = groups[gIdx];
+        
+        const matchIndexInArray = group.matches.findIndex(m => m.matchId === matchTag);
+        if(matchIndexInArray === -1) return;
+        const mObj = group.matches[matchIndexInArray];
+        
+        // Maçın kazananını işaretle
+        const winnerObj = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
+        mObj.winner = winnerObj;
+        mObj.score = "Tamamlandı"; 
+        
+        // Puan tablosunu kusursuz tutmak için gruptaki herkesin verisini sıfırla
+        group.players.forEach(p => { p.played = 0; p.won = 0; p.lost = 0; p.pts = 0; });
+        
+        // Gruptaki tüm TAMAMLANMIŞ maçları tara ve puanları baştan dağıt
+        group.matches.forEach(m => {
+            if (m.winner) {
+                const wId = m.winner.p1;
+                const wPlayer = group.players.find(p => p.p1 === wId);
+                const lPlayer = group.players.find(p => p.p1 !== wId && (p.p1 === m.p1.p1 || p.p1 === m.p2.p1));
+                
+                // Puanlama Sistemi (Düzenlenebilir): Galibiyet 3 Puan, Oynama (Mağlubiyet) 1 Puan
+                if(wPlayer) { wPlayer.played++; wPlayer.won++; wPlayer.pts += 3; }
+                if(lPlayer) { lPlayer.played++; lPlayer.lost++; lPlayer.pts += 1; }
+            }
+        });
 
-    const winnerObj = bracket[rIdx].matches[mIdx].p1.p1 === winnerUid ? bracket[rIdx].matches[mIdx].p1 : bracket[rIdx].matches[mIdx].p2;
-    
-    bracket[rIdx].matches[mIdx].winner = winnerObj;
-    bracket[rIdx].matches[mIdx].score = "Tamamlandı";
-
-    const nextR = rIdx + 1;
-    if (nextR < bracket.length) {
-        const nextM = Math.floor(mIdx / 2);
-        if (mIdx % 2 === 0) bracket[nextR].matches[nextM].p1 = winnerObj;
-        else bracket[nextR].matches[nextM].p2 = winnerObj;
-
-        // EĞER RAKİP DE BELLİYSE YENİ MAÇ DÖKÜMANI AÇ
-        const mObj = bracket[nextR].matches[nextM];
-        if (mObj.p1 && mObj.p2 && !mObj.firestoreMatchId) {
-            const newId = await createTournamentMatchDoc(tourId, mObj.p1, mObj.p2, bracket[nextR].roundName, `R${nextR}_M${nextM}`);
-            bracket[nextR].matches[nextM].firestoreMatchId = newId;
-        }
-    } else {
-        data.status = 'Bitti';
+        // Puan tablosunu yeniden sırala (En yüksek puanlı en üste)
+        group.players.sort((a, b) => b.pts - a.pts);
+        
+        // Veritabanını güncelle
+        await tourRef.update({ groups: groups });
+        return; // İşlemi bitir, eleme kodlarına inme
     }
 
-    await tourRef.update({ bracket, status: data.status });
+    // --- 2. DURUM: ELEME MAÇI (KNOCKOUT STAGE) İŞLEMLERİ ---
+    if (matchTag.startsWith('R')) {
+        let bracket = data.bracket;
+        const parts = matchTag.split('_');
+        const rIdx = parseInt(parts[0].replace('R',''));
+        const mIdx = parseInt(parts[1].replace('M',''));
+
+        const winnerObj = bracket[rIdx].matches[mIdx].p1.p1 === winnerUid ? bracket[rIdx].matches[mIdx].p1 : bracket[rIdx].matches[mIdx].p2;
+        
+        bracket[rIdx].matches[mIdx].winner = winnerObj;
+        bracket[rIdx].matches[mIdx].score = "Tamamlandı";
+
+        const nextR = rIdx + 1;
+        if (nextR < bracket.length) {
+            const nextM = Math.floor(mIdx / 2);
+            if (mIdx % 2 === 0) bracket[nextR].matches[nextM].p1 = winnerObj;
+            else bracket[nextR].matches[nextM].p2 = winnerObj;
+
+            // Eğer bir sonraki turdaki eşleşme tamamsa, gerçek maç dökümanını oluştur
+            const mObj = bracket[nextR].matches[nextM];
+            if (mObj.p1 && mObj.p2 && !mObj.firestoreMatchId) {
+                const newId = await createTournamentMatchDoc(tourId, mObj.p1, mObj.p2, bracket[nextR].roundName, `R${nextR}_M${nextM}`);
+                bracket[nextR].matches[nextM].firestoreMatchId = newId;
+            }
+        } else {
+            data.status = 'Bitti'; // Final maçı bittiyse turnuva biter
+        }
+
+        await tourRef.update({ bracket: bracket, status: data.status });
+    }
 }
     function goBackToList() {
         matchInteractionListeners.forEach(unsubscribe => unsubscribe()); matchInteractionListeners = [];
