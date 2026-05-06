@@ -1565,14 +1565,46 @@ async function finalizeMatch(id, m) {
             console.error(e); alert("Gruplar oluşturulurken hata: " + e.message);
         }
     };
-    function goBackToList() {
+function goBackToList() {
         matchInteractionListeners.forEach(unsubscribe => unsubscribe()); matchInteractionListeners = [];
         matchDetailView.style.display='none';
         if (returnToTab) {
-            tabSections.forEach(s => s.style.display = 'none'); document.getElementById(returnToTab).style.display = 'block'; navItems.forEach(n => n.classList.remove('active')); const navItem = document.querySelector(`.nav-item[data-target="${returnToTab}"]`); if(navItem) navItem.classList.add('active');
-            if (returnToTab === 'tab-matches') loadMyMatchesOverview(); if (returnToTab === 'tab-fixture') loadMatchesForFixture(); if (returnToTab === 'tab-gallery') loadGallery(); if (returnToTab === 'tab-profile') loadUserPhotos();
+            tabSections.forEach(s => s.style.display = 'none'); 
+            document.getElementById(returnToTab).style.display = 'block'; 
+            navItems.forEach(n => n.classList.remove('active')); 
+            const navItem = document.querySelector(`.nav-item[data-target="${returnToTab}"]`); 
+            if(navItem) navItem.classList.add('active');
+
+            if (returnToTab === 'tab-matches') loadMyMatchesOverview(); 
+            if (returnToTab === 'tab-fixture') loadMatchesForFixture(); 
+            if (returnToTab === 'tab-gallery') loadGallery(); 
+            if (returnToTab === 'tab-profile') loadUserPhotos();
+            
+            // --- YENİ: TURNUVA SAYFASINA DÖNÜŞTE OTOMATİK GÜNCELLEME ---
+            if (returnToTab === 'tab-tournaments') {
+                if (currentMatchDocId) {
+                    db.collection('matches').doc(currentMatchDocId).get().then(doc => {
+                        const mData = doc.data();
+                        if (mData && mData.tournamentId) {
+                            // Maçın ait olduğu turnuvayı bul ve verilerini canlı olarak tekrar çek!
+                            db.collection('tournaments').doc(mData.tournamentId).get().then(tDoc => {
+                                if(tDoc.exists) openTournamentDetail(tDoc.id, tDoc.data());
+                            });
+                        } else {
+                            loadTournaments();
+                        }
+                    });
+                } else {
+                    loadTournaments();
+                }
+            }
+            // -------------------------------------------------------------
+            
             returnToTab = null;
-        } else { document.getElementById('tab-lobby').style.display = 'block'; document.querySelector('[data-target="tab-lobby"]').classList.add('active'); }
+        } else { 
+            document.getElementById('tab-lobby').style.display = 'block'; 
+            document.querySelector('[data-target="tab-lobby"]').classList.add('active'); 
+        }
     }
 
     function setupNotifications(userId) {
@@ -3014,6 +3046,11 @@ submitChallengeBtn.addEventListener('click', async () => {
             bracketWrapper.appendChild(treeScrollArea);
             container.appendChild(bracketWrapper);
         }
+        const scrollSpacer = document.createElement('div');
+        scrollSpacer.style.height = "120px";
+        scrollSpacer.style.width = "100%";
+        scrollSpacer.style.flexShrink = "0";
+        container.appendChild(scrollSpacer);
     };
 // --- YÖNETİCİ: GRUPLARI BİTİR VE ELEME AĞACINA GEÇ ---
 // --- YÖNETİCİ: GRUPLARI BİTİR VE ELEME AĞACINA GEÇ ---
