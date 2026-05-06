@@ -2309,16 +2309,21 @@ window.openTournamentDetail = function(tourId, tourData) {
         
         const btnReopen = document.getElementById('btn-reopen-registration');
         if (btnReopen) btnReopen.onclick = () => updateTournamentStatus(tourId, 'Kayıt');
+        const btnAdminSaveReg = document.getElementById('btn-admin-save-reg');
+        if (btnAdminSaveReg) {
+            btnAdminSaveReg.onclick = () => adminAddParticipant(tourId);
+        }
     } else {
         adminArea.style.display = 'none';
     }
 
         // 3. Eşleşme (Bracket) Ağacı
-        const bracketContainer = document.getElementById('tour-bracket-container');
+const bracketContainer = document.getElementById('tour-bracket-container');
         if (tourData.status === 'Kayıt' || tourData.status === 'Format_Secimi') {
             bracketContainer.innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Eşleşmeler kura çekimi sonrası burada görünecektir.</p>';
         } else if (tourData.bracket) {
-            renderTournamentBracket(tourData.bracket, 'tour-bracket-container');
+            // DÜZELTME: Artık tourId'yi ilk parametre olarak gönderiyoruz!
+            renderTournamentBracket(tourId, tourData, myUid); 
         }
     };
 
@@ -2444,6 +2449,17 @@ window.openTournamentDetail = function(tourId, tourData) {
         }
     };
 
+    // --- YÖNETİCİ: TURNUVA DURUMUNU GÜNCELLEME (Kayıtları Tekrar Açma vb.) ---
+    window.updateTournamentStatus = async function(tourId, newStatus) {
+        if(!confirm(`Turnuva durumunu '${newStatus}' olarak değiştirmek istediğinize emin misiniz?`)) return;
+        try {
+            await db.collection('tournaments').doc(tourId).update({ status: newStatus });
+            alert("Turnuva durumu güncellendi!");
+            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+            openTournamentDetail(tourId, updatedDoc.data());
+        } catch(e) { alert("Hata: " + e.message); }
+    };
+
     // --- VERİTABANI: KAYIT İPTAL FONKSİYONU ---
     async function cancelTournamentRegistration(tourId, registrationObj) {
         if (!confirm("Turnuva kaydını iptal etmek istediğine emin misin?")) return;
@@ -2550,9 +2566,8 @@ window.openTournamentDetail = function(tourId, tourData) {
     }
 
     // --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
-// --- TURNUVA AĞACINI (BRACKET) EKRANA ÇİZME ---
-    // (Güncellendi: Artık tourId'yi de alıyor ve tıklama olayını dinliyor)
-    window.renderTournamentBracket = function(tourData, myUid) {
+
+    window.renderTournamentBracket = function(tourId, tourData, myUid) {
         const container = document.getElementById('tour-bracket-container');
         if(!container) return;
         container.innerHTML = ''; 
@@ -2574,7 +2589,7 @@ window.openTournamentDetail = function(tourId, tourData) {
 
                 const getPlayerName = (p) => {
                     if (!p) return '<span style="color:#ccc; font-style:italic;">Belirlenmedi</span>';
-                    if (p.isBye) return '<span style="color:#ccc; font-weight:bold;">BAY</span>';
+                    if (p.isBye) return '<span style="color:#ccc; font-weight:bold;">BAY (Boş)</span>';
                     let name = userMap[p.p1]?.isim.split(' ')[0] || 'Oyuncu';
                     if (p.p2) name += ` & ${userMap[p.p2]?.isim.split(' ')[0]}`;
                     return name;
@@ -2594,12 +2609,11 @@ window.openTournamentDetail = function(tourId, tourData) {
                     </div>
                 `;
                 
-                // EĞER ADMİNSE VE İKİ OYUNCU DA BELLİYSE SKOR GİRİLEBİLİR
+                // KONTROL: Sadece iki gerçek oyuncu varsa ve Adminseniz tıklanabilir yap
                 if (isAdmin && match.p1 && !match.p1.isBye && match.p2 && !match.p2.isBye) {
                     matchDiv.style.cursor = 'pointer';
-                    matchDiv.onclick = () => openTourScoreModal(tourData.id, rIndex, mIndex, match);
+                    matchDiv.onclick = () => openTourScoreModal(tourId, rIndex, mIndex, match);
                 } else if (!isAdmin && match.p1 && match.p2) {
-                    // Normal oyuncular için tıklama efekti yok
                     matchDiv.style.cursor = 'default';
                 }
 
@@ -2933,20 +2947,72 @@ window.openTournamentDetail = function(tourId, tourData) {
         if (p1Select) p1Select.innerHTML = optionsHTML;
         if (p2Select) p2Select.innerHTML = optionsHTML;
     }
-async function adminAddParticipant(tourId) {
+// --- YÖNETİCİ: MANUEL OYUNCU EKLEME VE AĞACA YERLEŞTİRME ---
+window.adminAddParticipant = async function(tourId) {
     const p1 = document.getElementById('admin-p1-select').value;
     const p2 = document.getElementById('admin-p2-select')?.value || null;
 
     if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
 
     try {
-        await db.collection('tournaments').doc(tourId).update({
-            participants: firebase.firestore.FieldValue.arrayUnion({ p1, p2 })
-        });
-        alert("Oyuncu/Takım başarıyla eklendi.");
-        loadTournaments(); // Listeyi yenile
-    } catch(e) { alert("Hata: " + e.message); }
-}
+        const docRef = db.collection('tournaments').doc(tourId);
+        const docSnap = await docRef.get();
+        const tourData = docSnap.data();
+        
+        const newPlayerObj = { p1, p2, points: 0 }; // Kura sonrası eklendiği için puanı 0 sayılır
+
+        // DURUM 1: Henüz Kura Çekilmemiş (Sadece listeye ekle)
+        if (tourData.status === 'Kayıt' || tourData.status === 'Format_Secimi' || !tourData.bracket) {
+            await docRef.update({
+                participants: firebase.firestore.FieldValue.arrayUnion(newPlayerObj)
+            });
+            alert("Oyuncu/Takım başarıyla eklendi.");
+        } 
+        // DURUM 2: Kura Çekilmiş, Ağaç Çizilmiş (BAY kontrolü yap)
+        else {
+            let bracket = tourData.bracket;
+            let firstRound = bracket[0].matches;
+            let byeFound = false;
+
+            // İlk turdaki maçları tara ve "BAY" olan bir slot bul
+            for (let i = 0; i < firstRound.length; i++) {
+                let m = firstRound[i];
+                if (m.p1 && m.p1.isBye) {
+                    m.p1 = newPlayerObj;
+                    m.winner = null; // AutoWinner durumunu iptal et
+                    m.score = null;
+                    byeFound = true;
+                    break;
+                } else if (m.p2 && m.p2.isBye) {
+                    m.p2 = newPlayerObj;
+                    m.winner = null; // AutoWinner durumunu iptal et
+                    m.score = null;
+                    byeFound = true;
+                    break;
+                }
+            }
+
+            if (byeFound) {
+                // BAY bulduysak hem katılımcı listesini hem ağacı (bracket) güncelle
+                let updatedParticipants = tourData.participants || [];
+                updatedParticipants.push(newPlayerObj);
+                
+                await docRef.update({
+                    participants: updatedParticipants,
+                    bracket: bracket
+                });
+                alert("Başarılı! Yeni oyuncu ağaçtaki boş bir BAY (Bay Geçme) slotuna yerleştirildi 🎾");
+            } else {
+                return alert("Kura çekilmiş ve ağaçta boş yer (BAY) kalmamış! Yeni oyuncuyu eklemek, ağacın tamamen bozulmasına sebep olacağı için güvenlik gereği engellendi.");
+            }
+        }
+        
+        // Listeyi ve ekranı yenile
+        const updatedDoc = await docRef.get();
+        openTournamentDetail(tourId, updatedDoc.data());
+        
+    } catch(e) { alert("Ekleme Hatası: " + e.message); }
+};
 
 // Kayıt silme yetkisi
 window.adminDeleteParticipant = async function(tourId, index) {
