@@ -1978,3 +1978,7 @@ button:active {
     background-color: #ccc;
     display: none; /* Şimdilik gizli, JS ile aktif edeceğiz */
 }
+/* Alt menünün içeriğin üstüne binmesini engeller */
+.tab-section {
+    padding-bottom: 110px !important; 
+}
