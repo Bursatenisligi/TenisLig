@@ -1362,7 +1362,7 @@ function showMatchDetail(matchDocId) {
                         <div style="background:#e3f2fd; padding:15px; border-radius:10px; border:1px solid #bbdefb; text-align:center;">
                             <h4 style="margin-top:0; color:#0d47a1;">📬 Skor Onayı Bekleniyor</h4>
                             <div style="font-size:1.2em; font-weight:bold; margin-bottom:10px;">${oppS1}-${myS1}, ${oppS2}-${myS2} ${s.s3_me || s.s3_opp ? `, ${oppS3}-${myS3}` : ''}</div>
-                            <div style="font-size:0.9em; color:#555; margin-bottom:15px;">Kazanan Adayı: <strong>${userMap[match.adayKazananID]?.isim || 'Bilinmiyor'}</strong></div>
+                            <div style="font-size:0.9em; color:#555; margin-bottom:15px;">Kazanan Adayı: <strong>${(match.adayKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></div>
                             <button id="btn-toggle-approve" class="btn-main" style="background-color:#007bff; width:100%;">⚖️ Skoru İncele / Onayla / Değiştir</button>
                             <div id="approve-action-area" style="display:none; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd;">
                                 <p style="color:#28a745; font-weight:bold; margin-bottom:5px;">✅ Her şey doğru mu?</p>
@@ -1394,7 +1394,7 @@ function showMatchDetail(matchDocId) {
             }
             else if (match.durum === 'Tamamlandı') {
                 const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
-                scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${userMap[match.kayitliKazananID]?.isim}</strong></p></div>`;
+                scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${(match.kayitliKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></p></div>`;
             }
 
 const shareMatchBtn = document.getElementById('btn-share-match-detail');
