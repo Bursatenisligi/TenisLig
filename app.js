@@ -1402,8 +1402,7 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
                 const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
                 newShareBtn.innerHTML = '📸 Instagram\'da Paylaş'; newShareBtn.style.background = 'linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d)';
                 
-newShareBtn.addEventListener('click', async () => {
-                    // YENİ: LİNKİ OTOMATİK KOPYALA VE UYARI VER
+                newShareBtn.addEventListener('click', async () => {
                     try { await navigator.clipboard.writeText("https://bursatenisligi.github.io/TenisLig/"); } catch(e) {}
                     alert("Sitenin linki panoya (hafızaya) kopyalandı! 📋\n\nResim oluştuktan sonra Instagram hikayenize eklerken 'Çıkartmalar' menüsünden 'Bağlantı' aracını seçip kopyalanan linki direkt yapıştırabilirsiniz.");
 
@@ -1444,45 +1443,33 @@ newShareBtn.addEventListener('click', async () => {
 
                     const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
                     let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
-                    let isDoubles = finalMatchData.macFormati === 'Çiftler';
                     
-                    let winnerAvatarsHTML = '';
-                    if (isTeam1Winner) {
-                        winnerAvatarsHTML = `<img src="${p1.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; margin-right:${p1p?'-30px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
-                        if(p1p) winnerAvatarsHTML += `<img src="${p1p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
-                    } else {
-                        winnerAvatarsHTML = `<img src="${p2.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; margin-right:${p2p?'-30px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
-                        if(p2p) winnerAvatarsHTML += `<img src="${p2p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
-                    }
-
                     const cardStyle = "width: 1080px; height: 1920px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); position: fixed; top: -5000px; left: 0; font-family: 'Poppins', sans-serif; display:flex; flex-direction:column; padding: 100px 80px; box-sizing:border-box; color:white; justify-content:space-between; align-items:center; text-align:center;";
                     
-                    // YENİ: Alt kısımdaki yönlendirme butonu (Link Sticker alanı)
-                    const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.5); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👆 Sıralama ve Detaylar İçin Linke Tıkla 👆</div>`;
+                    const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.6); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.8); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👇 Sıralama ve Detaylar İçin Linke Tıkla 👇</div>`;
 
                     let innerContent = '';
                     if (hasPhoto) {
                         innerContent = `
                         <div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;">
-                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%); z-index:1;"></div>
+                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%); z-index:1;"></div>
                             <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
                                 <div style="display:flex; flex-direction:column; align-items:center;">
-                                    <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px;">
-                                    <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.6);">MAÇ SONUCU</h1>
+                                    <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                                    <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.8);">MAÇ SONUCU</h1>
                                     ${matchBadgeHTML}
                                 </div>
                                 <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
-                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.6);">${team1Name}</div>
-                                    <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.8);">VS</div>
-                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.6);">${team2Name}</div>
+                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team1Name}</div>
+                                    <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.9);">VS</div>
+                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team2Name}</div>
                                 </div>
-                                <div style="background:rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 2px solid rgba(255,255,255,0.15); color:#fff; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-                                    <h3 style="margin:0 0 30px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
-                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">${winnerAvatarsHTML}</div>
-                                    <div style="font-size:3.2em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">${winnerTeam}</div>
-                                    <div style="border-top:2px dashed rgba(255,255,255,0.2); padding-top:40px;">
-                                        <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                        <div style="font-size:6em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 4px 10px rgba(0,0,0,0.6);">${scoreText}</div>
+                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
+                                    <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">🏆 KAZANAN</h3>
+                                    <div style="font-size:3.8em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.9);">${winnerTeam}</div>
+                                    <div style="border-top:3px dashed rgba(255,255,255,0.6); padding-top:40px; width:80%;">
+                                        <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600; text-shadow: 0 3px 8px rgba(0,0,0,0.9);">SKOR</div>
+                                        <div style="font-size:7em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.9);">${scoreText}</div>
                                     </div>
                                 </div>
                                 ${ctaHTML}
@@ -1502,13 +1489,12 @@ newShareBtn.addEventListener('click', async () => {
                                     <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div>
                                     <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2Name}</div>
                                 </div>
-                                <div style="background:rgba(255,255,255,0.15); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 2px solid rgba(255,255,255,0.2); color:#fff; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
-                                    <h3 style="margin:0 0 30px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">🏆 KAZANAN</h3>
-                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">${winnerAvatarsHTML}</div>
-                                    <div style="font-size:3.5em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">${winnerTeam}</div>
-                                    <div style="border-top:3px dashed rgba(255,255,255,0.3); padding-top:40px;">
+                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
+                                    <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
+                                    <div style="font-size:4em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.5);">${winnerTeam}</div>
+                                    <div style="border-top:3px dashed rgba(255,255,255,0.4); padding-top:40px; width:80%;">
                                         <div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                        <div style="font-size:6.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${scoreText}</div>
+                                        <div style="font-size:7.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.5);">${scoreText}</div>
                                     </div>
                                 </div>
                                 ${ctaHTML}
@@ -2337,7 +2323,7 @@ submitChallengeBtn.addEventListener('click', async () => {
         shareBtn.onclick = () => { shareElementAsImage('recap-capture-area', 'tenis-ozet', 'btn-share-recap'); };
     }
 
-    async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
+async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         const element = document.getElementById(elementId); const button = document.getElementById(buttonId);
         if (!element || !button) return;
         const originalText = button.innerHTML; const originalColor = button.style.background;
@@ -2358,7 +2344,8 @@ submitChallengeBtn.addEventListener('click', async () => {
 
                 readyBtn.addEventListener('click', async () => {
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        try { await navigator.share({ files: [file], title: 'Tenis Ligi', text: 'Kortlardaki performansım! 🎾' }); cleanupAfterShare(readyBtn, originalText, originalColor); } 
+                        // PAYLAŞIM YAZISI BURADA DÜZELTİLDİ:
+                        try { await navigator.share({ files: [file], title: 'Tenis Ligi', text: 'https://bursatenisligi.github.io/TenisLig/' }); cleanupAfterShare(readyBtn, originalText, originalColor); } 
                         catch (err) { console.log("Paylaşım iptal:", err); cleanupAfterShare(readyBtn, originalText, originalColor); }
                     } else {
                         const link = document.createElement('a'); link.download = `${fileNamePrefix}-${Date.now()}.png`; link.href = canvas.toDataURL(); link.click(); cleanupAfterShare(readyBtn, originalText, originalColor);
