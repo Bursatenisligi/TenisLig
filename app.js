@@ -997,17 +997,37 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         });
     }
 
+// --- OYUNCU (VE PARTNER) İSTATİSTİK HESAPLAMA MOTORU ---
     async function calculateAdvancedStats(userId) {
-        const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get(); const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const [s1, s2] = await Promise.all([q1, q2]);
-        let allMatches = []; s1.forEach(d => allMatches.push({ ...d.data(), id: d.id })); s2.forEach(d => allMatches.push({ ...d.data(), id: d.id }));
+        // Kaptan VEYA Partner olarak oynadığı tüm maçları çek
+        const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+        const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+        const q3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+        const q4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+
+        const [s1, s2, s3, s4] = await Promise.all([q1, q2, q3, q4]);
+        let allMatches = [];
+        const pushDoc = (d) => allMatches.push({ ...d.data(), id: d.id });
+        s1.forEach(pushDoc); s2.forEach(pushDoc); s3.forEach(pushDoc); s4.forEach(pushDoc);
+        
+        // Aynı maçın iki kez eklenmesini önle
+        allMatches = allMatches.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i);
         allMatches.sort((a, b) => { const tA = a.tarih ? a.tarih.seconds : 0; const tB = b.tarih ? b.tarih.seconds : 0; return tB - tA; });
 
         let stats = { played: 0, won: 0, setsPlayed: 0, setsWon: 0, gamesPlayed: 0, gamesWon: 0, clay: { played: 0, won: 0 }, hard: { played: 0, won: 0 }, form: [] };
 
         allMatches.forEach(m => {
-            stats.played++; const isWinner = m.kayitliKazananID === userId; if (isWinner) stats.won++;
+            stats.played++; 
+            
+            // Kazanma Mantığı (Kaptan veya Partner olması fark etmez)
+            let isWinner = false;
+            if (m.kayitliKazananID === userId) isWinner = true; 
+            else if (m.kayitliKazananID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) isWinner = true; 
+            else if (m.kayitliKazananID === m.oyuncu2ID && m.oyuncu2PartnerID === userId) isWinner = true; 
+
+            if (isWinner) stats.won++;
             if(stats.form.length < 5) stats.form.push(isWinner ? 'W' : 'L');
+            
             let surface = 'other'; const courtType = (m.kortTipi || '').toLocaleLowerCase('tr-TR');
             if(courtType.includes('toprak')) surface = 'clay'; else if(courtType.includes('sert')) surface = 'hard';
             if(surface !== 'other') { stats[surface].played++; if(isWinner) stats[surface].won++; }
@@ -1015,8 +1035,15 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
             if (m.skor) {
                 const s = m.skor; const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp, tb: true}];
                 sets.forEach(set => {
-                    let myG, opG;
-                    if (m.sonucuGirenID === userId) { myG = parseInt(set.p1 || 0); opG = parseInt(set.p2 || 0); } else { myG = parseInt(set.p2 || 0); opG = parseInt(set.p1 || 0); }
+                    let myG = 0, opG = 0;
+                    // Skoru giren kişi benim takım arkadaşım mı?
+                    const isMyTeamScore = (m.sonucuGirenID === userId) || 
+                                          (m.sonucuGirenID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) ||
+                                          (m.sonucuGirenID === m.oyuncu2ID && m.oyuncu2PartnerID === userId);
+
+                    if (isMyTeamScore) { myG = parseInt(set.p1 || 0); opG = parseInt(set.p2 || 0); } 
+                    else { myG = parseInt(set.p2 || 0); opG = parseInt(set.p1 || 0); }
+                    
                     if(myG + opG > 0) { stats.setsPlayed++; if(myG > opG) stats.setsWon++; if(!set.tb) { stats.gamesPlayed += (myG + opG); stats.gamesWon += myG; } }
                 });
             }
@@ -1097,8 +1124,12 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
             if (!photosContainer) { photosContainer = document.createElement('div'); photosContainer.id = 'player-stats-photos'; photosContainer.style.marginTop = '20px'; photosContainer.style.borderTop = '1px solid #eee'; photosContainer.style.paddingTop = '15px'; statsContainer.appendChild(photosContainer); }
             photosContainer.innerHTML = '<p style="text-align:center; color:#999; font-size:0.9em;">Fotoğraflar taranıyor...</p>';
 
-            const pq1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get(); const pq2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-            Promise.all([pq1, pq2]).then(snapshots => {
+            const pq1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+            const pq2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+            const pq3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+            const pq4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+            Promise.all([pq1, pq2, pq3, pq4]).then(snapshots => {
+            
                 let photos = [];
                 snapshots.forEach(snap => { snap.forEach(doc => { const m = doc.data(); if (m.macFotoURL) { photos.push({ ...m, id: doc.id, dateObj: m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : new Date()) }); } }); });
                 photos = photos.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i); photos.sort((a,b) => b.dateObj - a.dateObj);
