@@ -2781,17 +2781,15 @@ submitChallengeBtn.addEventListener('click', async () => {
             group.matches.forEach(m => {
                 if (m.winner && m.rawScore) {
                     const s = m.rawScore;
+                    // HATA BURADAYDI: Turnuva arayüzünde "s1_me" her zaman Takım 1, "s1_opp" her zaman Takım 2 skorudur.
+                    // Kimin girdiği fark etmeksizin oyun sayıları doğrudan doğru takıma yazılmalı.
                     const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
                     const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
                     
-                    const repGames = s1m + s2m; 
-                    const oppGames = s1o + s2o;
+                    const p1G = s1m + s2m; 
+                    const p2G = s1o + s2o;
                     
                     const p1Id = m.p1.p1; const p2Id = m.p2.p1;
-                    let p1G = 0, p2G = 0;
-                    if (m.reporterId === p1Id) { p1G = repGames; p2G = oppGames; }
-                    else { p2G = repGames; p1G = oppGames; }
-                    
                     const p1Player = group.players.find(p => p.p1 === p1Id);
                     const p2Player = group.players.find(p => p.p1 === p2Id);
                     
@@ -2883,6 +2881,94 @@ submitChallengeBtn.addEventListener('click', async () => {
                 }
             }
         }
+    };
+
+    // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
+    window.finalizeMatch = async function(id, m) {
+        const batch = db.batch(); 
+        const wid = m.adayKazananID; 
+        const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+
+        let wPartnerId = null; let lPartnerId = null;
+        if (m.macFormati === 'Çiftler') {
+            wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+            lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
+        }
+
+        let wg = 0, lg = 0;
+        if(m.skor) {
+            const s = m.skor; 
+            if (m.macTipi === 'Turnuva') {
+                // HATA BURADAYDI: Bonus Puan Dağıtımı Düzeltildi
+                const p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0);
+                const p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0);
+                if (m.oyuncu1ID === wid) { wg = p1G; lg = p2G; } else { wg = p2G; lg = p1G; }
+            } else {
+                const isEntryByWinner = m.sonucuGirenID === wid;
+                const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0); 
+                const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0); 
+                const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0); 
+                const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
+                wg = s1w + s2w; lg = s1l + s2l;
+            }
+        }
+        const bonusW = wg * 5; const bonusL = lg * 5;
+
+        let winPoints = 50 + bonusW; let losePoints = 50 + bonusL; 
+        if(m.macTipi === 'Meydan Okuma') { winPoints = m.bahisPuani + bonusW; losePoints = -m.bahisPuani + bonusL; }
+
+        const updateStats = (uid, isWin) => {
+            if(!uid) return;
+            const ref = db.collection('users').doc(uid);
+            const pts = isWin ? winPoints : losePoints;
+            const gInc = isWin ? 1 : 0;
+            
+            if (m.macFormati === 'Çiftler') {
+                const uData = userMap[uid] || {};
+                const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
+                batch.update(ref, { 
+                    ciftlerPuani: currentCiftler + pts,
+                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc),
+                    macSayisi: firebase.firestore.FieldValue.increment(1)
+                });
+            } else {
+                batch.update(ref, { 
+                    toplamPuan: firebase.firestore.FieldValue.increment(pts), 
+                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc), 
+                    macSayisi: firebase.firestore.FieldValue.increment(1) 
+                });
+            }
+        };
+
+        updateStats(wid, true); 
+        updateStats(lid, false);
+        if (m.macFormati === 'Çiftler') { 
+            updateStats(wPartnerId, true); 
+            updateStats(lPartnerId, false); 
+        }
+
+        const matchRef = db.collection('matches').doc(id);
+        batch.update(matchRef, { durum: 'Tamamlandı', kayitliKazananID: wid });
+
+        try {
+            await batch.commit();
+            
+            if (m.tournamentId && m.matchTag) {
+                if (typeof window.advanceTournamentBracket === 'function') {
+                    await window.advanceTournamentBracket(m.tournamentId, m.matchTag, wid);
+                }
+            }
+            
+            if (typeof checkAndGrantBadges === 'function') {
+                await checkAndGrantBadges(wid); await checkAndGrantBadges(lid);
+            }
+            alert("✅ Maç onaylandı ve puanlar doğru haneye işlendi!"); 
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#c06035', '#ffffff', '#28a745'] });
+            }
+            if (typeof goBackToList === 'function') goBackToList(); 
+            if (typeof loadLeaderboard === 'function') loadLeaderboard();
+        } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
     };
 
     // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
