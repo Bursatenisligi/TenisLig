@@ -1015,6 +1015,7 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
     }
 
 // --- OYUNCU (VE PARTNER) İSTATİSTİK HESAPLAMA MOTORU (GARANTİLİ VERSİYON) ---
+// --- OYUNCU (VE PARTNER) İSTATİSTİK HESAPLAMA MOTORU (GARANTİLİ & TURNUVA UYUMLU VERSİYON) ---
     async function calculateAdvancedStats(userId) {
         // Firebase'i yormadan tüm tamamlanmış maçları çek
         const allMatchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
@@ -1022,7 +1023,6 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         
         allMatchesSnap.forEach(doc => {
             const m = doc.data();
-            // Eşleştirme işlemini (Kaptan veya Partner) kod içinde yapıyoruz
             if (m.oyuncu1ID === userId || m.oyuncu2ID === userId || m.oyuncu1PartnerID === userId || m.oyuncu2PartnerID === userId) {
                 allMatches.push({ ...m, id: doc.id });
             }
@@ -1051,14 +1051,38 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
                 const s = m.skor; const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp, tb: true}];
                 sets.forEach(set => {
                     let myG = 0, opG = 0;
-                    const isMyTeamScore = (m.sonucuGirenID === userId) || 
-                                          (m.sonucuGirenID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) ||
-                                          (m.sonucuGirenID === m.oyuncu2ID && m.oyuncu2PartnerID === userId);
-
-                    if (isMyTeamScore) { myG = parseInt(set.p1 || 0); opG = parseInt(set.p2 || 0); } 
-                    else { myG = parseInt(set.p2 || 0); opG = parseInt(set.p1 || 0); }
                     
-                    if(myG + opG > 0) { stats.setsPlayed++; if(myG > opG) stats.setsWon++; if(!set.tb) { stats.gamesPlayed += (myG + opG); stats.gamesWon += myG; } }
+                    if (m.macTipi === 'Turnuva') {
+                        // YENİ: Turnuvalarda skor kutuları sabittir (p1=Takım1, p2=Takım2)
+                        const isTeam1 = (m.oyuncu1ID === userId || m.oyuncu1PartnerID === userId);
+                        if (isTeam1) { 
+                            myG = parseInt(set.p1 || 0); 
+                            opG = parseInt(set.p2 || 0); 
+                        } else { 
+                            myG = parseInt(set.p2 || 0); 
+                            opG = parseInt(set.p1 || 0); 
+                        }
+                    } else {
+                        // Normal maçlarda ayna (Skoru girene göre Ben/Rakip) mantığı
+                        const isMyTeamScore = (m.sonucuGirenID === userId) || 
+                                              (m.sonucuGirenID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) ||
+                                              (m.sonucuGirenID === m.oyuncu2ID && m.oyuncu2PartnerID === userId);
+
+                        if (isMyTeamScore) { 
+                            myG = parseInt(set.p1 || 0); 
+                            opG = parseInt(set.p2 || 0); 
+                        } else { 
+                            myG = parseInt(set.p2 || 0); 
+                            opG = parseInt(set.p1 || 0); 
+                        }
+                    }
+                    
+                    if(myG + opG > 0) { 
+                        stats.setsPlayed++; 
+                        if(myG > opG) stats.setsWon++; 
+                        // Tie-Break seti oyun sayısına eklenmez
+                        if(!set.tb) { stats.gamesPlayed += (myG + opG); stats.gamesWon += myG; } 
+                    }
                 });
             }
         });
@@ -3576,5 +3600,123 @@ submitChallengeBtn.addEventListener('click', async () => {
         if (window.Notification && Notification.permission === 'granted') {
             btnEnablePush.style.display = 'none';
         }
+    }
+
+    // --- TÜM LİGİN PUANLARINI SIFIRDAN HESAPLAMA MOTORU (MANUEL DEĞİŞİKLİKLER İÇİN) ---
+    window.recalculateAllPoints = async function() {
+        if(!confirm("DİKKAT: Veritabanındaki manuel değişiklikler nedeniyle bozulan puanları düzeltmek için tüm ligin puanları maç geçmişine bakılarak SIFIRDAN hesaplanacaktır. Onaylıyor musunuz?")) return;
+        try {
+            // Ekrana yükleniyor yazısı koy
+            const loading = document.createElement('div');
+            loading.id = 'recalc-loading';
+            loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:white;display:flex;justify-content:center;align-items:center;z-index:9999;font-size:1.2em;font-weight:bold;text-align:center;padding:20px;';
+            loading.innerHTML = 'Lig verileri taranıyor ve puanlar yeniden dağıtılıyor...<br>Lütfen bekleyin ⏳';
+            document.body.appendChild(loading);
+
+            // 1. Tüm kullanıcıları al ve puanlarını sıfırla (1000)
+            const usersSnap = await db.collection('users').get();
+            let userStats = {};
+            usersSnap.forEach(doc => {
+                userStats[doc.id] = {
+                    toplamPuan: 1000,
+                    ciftlerPuani: 1000,
+                    galibiyetSayisi: 0,
+                    macSayisi: 0,
+                    ref: doc.ref
+                };
+            });
+
+            // 2. Tüm bitmiş maçları çek
+            const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+
+            matchesSnap.forEach(doc => {
+                const m = doc.data();
+                const wid = m.kayitliKazananID;
+                if(!wid) return; // Kazananı belli olmayan maçları atla
+                
+                const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+
+                // Partnerleri de yakala
+                let wPartnerId = null; let lPartnerId = null;
+                if (m.macFormati === 'Çiftler') {
+                    wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+                    lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
+                }
+
+                // 3. Puan Matematiği
+                let wg = 0, lg = 0;
+                if(m.skor) {
+                    const s = m.skor;
+                    if (m.macTipi === 'Turnuva') {
+                        const p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0);
+                        const p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0);
+                        if (m.oyuncu1ID === wid) { wg = p1G; lg = p2G; } else { wg = p2G; lg = p1G; }
+                    } else {
+                        const isEntryByWinner = m.sonucuGirenID === wid;
+                        const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0);
+                        const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0);
+                        const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0);
+                        const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
+                        wg = s1w + s2w; lg = s1l + s2l;
+                    }
+                }
+                const bonusW = wg * 5; const bonusL = lg * 5;
+
+                let winPoints = 50 + bonusW; let losePoints = 50 + bonusL;
+                if(m.macTipi === 'Meydan Okuma') { winPoints = m.bahisPuani + bonusW; losePoints = -m.bahisPuani + bonusL; }
+
+                // Puanları hanelere yazma fonksiyonu
+                const applyToUser = (uid, isWin) => {
+                    if(!uid || !userStats[uid]) return;
+                    userStats[uid].macSayisi += 1;
+                    if(isWin) userStats[uid].galibiyetSayisi += 1;
+
+                    if (m.macFormati === 'Çiftler') {
+                        userStats[uid].ciftlerPuani += isWin ? winPoints : losePoints;
+                    } else {
+                        userStats[uid].toplamPuan += isWin ? winPoints : losePoints;
+                    }
+                };
+
+                // Puanları Dağıt
+                applyToUser(wid, true);
+                applyToUser(lid, false);
+                if (m.macFormati === 'Çiftler') {
+                    applyToUser(wPartnerId, true);
+                    applyToUser(lPartnerId, false);
+                }
+            });
+
+            // 4. Yeni Puanları Veritabanına Topluca Kaydet
+            const batch = db.batch();
+            for (const uid in userStats) {
+                const u = userStats[uid];
+                batch.update(u.ref, {
+                    toplamPuan: u.toplamPuan,
+                    ciftlerPuani: u.ciftlerPuani,
+                    galibiyetSayisi: u.galibiyetSayisi,
+                    macSayisi: u.macSayisi
+                });
+            }
+
+            await batch.commit();
+            document.getElementById('recalc-loading').remove();
+            alert("Muazzam! Tüm lig puanları mevcut maçlara göre sıfırdan hesaplandı ve hak edenlere teslim edildi! ✅");
+            window.location.reload();
+        } catch(e) {
+            console.error(e);
+            alert("Hata oluştu: " + e.message);
+            if(document.getElementById('recalc-loading')) document.getElementById('recalc-loading').remove();
+        }
+    };
+
+    // SIRALAMA SEKMESİNE ONARIM BUTONU EKLEME
+    const rankTab = document.getElementById('tab-rankings');
+    if (rankTab) {
+        const fixBtn = document.createElement('button');
+        fixBtn.innerHTML = "🛠️ Tüm Puanları Sıfırdan Onar (Manuel Değişiklikler İçin)";
+        fixBtn.style.cssText = "width:100%; background:#17a2b8; color:white; border:none; padding:10px; border-radius:8px; margin-top:20px; font-weight:bold; cursor:pointer;";
+        fixBtn.onclick = window.recalculateAllPoints;
+        rankTab.appendChild(fixBtn);
     }
 }); // DOMContentLoaded SONU
