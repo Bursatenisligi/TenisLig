@@ -2323,67 +2323,77 @@ submitChallengeBtn.addEventListener('click', async () => {
 
     
 // --- YÖNETİCİ: HATALI MAÇLARI VE MANUEL OYUNCU DEĞİŞİKLİKLERİNİ TABLOYA ZORLA İŞLEME (SÜPER SENKRONİZASYON) ---
+ // --- YÖNETİCİ: HATALI MAÇLARI VE MANUEL OYUNCU DEĞİŞİKLİKLERİNİ TABLOYA ZORLA İŞLEME (ULTRA SENKRONİZASYON) ---
     window.syncTournamentMatches = async function(tourId) {
-        if (!confirm("Arafta kalan maçları ve VERİTABANINDAN ELLE DEĞİŞTİRDİĞİNİZ oyuncuları turnuva tablosuna yansıtmak istiyor musunuz?")) return;
+        if (!confirm("Veritabanından elle değiştirdiğiniz oyuncuları ve onay bekleyen maçları turnuva ağacına zorla yansıtmak istiyor musunuz?")) return;
         try {
             const container = document.getElementById('tournament-detail-view');
-            container.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#17a2b8;">Eksik maçlar ve güncel oyuncular aranıyor... Lütfen bekleyin ⏳</p>';
+            container.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#17a2b8;">Veritabanı derinlemesine taranıyor, ağaç güncelleniyor... Lütfen bekleyin ⏳</p>';
 
             const tourRef = db.collection('tournaments').doc(tourId);
             const tourSnap = await tourRef.get();
             const tourData = tourSnap.data();
 
-            // 1. Ligdeki gerçek maçları bul
-            const allMatchesSnap = await db.collection('matches').where('tournamentId', '==', tourId).get();
-            let matchUpdates = {};
-            allMatchesSnap.forEach(doc => { matchUpdates[doc.data().matchTag] = doc.data(); });
-
             let groups = tourData.groups || [];
             let bracket = tourData.bracket || [];
-            let hasChanges = false;
 
-            // Grup Maçlarındaki isimleri güncelle
+            // 1. Ligdeki gerçek maçları kendi Orijinal ID'leri ile çek (Kesin Eşleşme İçin)
+            const allMatchesSnap = await db.collection('matches').where('tournamentId', '==', tourId).get();
+            let matchUpdatesById = {};
+            allMatchesSnap.forEach(doc => { matchUpdatesById[doc.id] = doc.data(); });
+
+            // 2. Grup Maçlarındaki isimleri güncelle
             if (groups.length > 0) {
                 groups.forEach(g => {
                     g.matches.forEach(m => {
-                        const dbMatch = matchUpdates[m.matchId];
-                        if (dbMatch && m.p1 && m.p2) {
-                            if (m.p1.p1 !== dbMatch.oyuncu1ID || m.p1.p2 !== dbMatch.oyuncu1PartnerID || m.p2.p1 !== dbMatch.oyuncu2ID || m.p2.p2 !== dbMatch.oyuncu2PartnerID) {
-                                m.p1.p1 = dbMatch.oyuncu1ID; m.p1.p2 = dbMatch.oyuncu1PartnerID || null;
-                                m.p2.p1 = dbMatch.oyuncu2ID; m.p2.p2 = dbMatch.oyuncu2PartnerID || null;
-                                hasChanges = true;
+                        if (m.firestoreMatchId && matchUpdatesById[m.firestoreMatchId]) {
+                            const dbm = matchUpdatesById[m.firestoreMatchId];
+                            if(!m.p1) m.p1 = {}; if(!m.p2) m.p2 = {};
+                            
+                            // Oyuncu Kimliklerini Veritabanından Alıp Ağaca Kopyala
+                            m.p1.p1 = dbm.oyuncu1ID; m.p1.p2 = dbm.oyuncu1PartnerID || null;
+                            m.p2.p1 = dbm.oyuncu2ID; m.p2.p2 = dbm.oyuncu2PartnerID || null;
+                            
+                            // Eğer maç bittiyse kazananı da düzelt
+                            if(dbm.durum === 'Tamamlandı' && dbm.kayitliKazananID) {
+                                m.winner = (m.p1.p1 === dbm.kayitliKazananID) ? m.p1 : m.p2;
+                                m.score = "Tamamlandı";
                             }
                         }
                     });
                 });
             }
 
-            // Eleme Ağacındaki isimleri güncelle
+            // 3. Eleme Ağacındaki (Bracket) isimleri güncelle
             if (bracket.length > 0) {
-                bracket.forEach((r, rIdx) => {
-                    r.matches.forEach((m, mIdx) => {
-                        const tag = `R${rIdx}_M${mIdx}`;
-                        const dbMatch = matchUpdates[tag];
-                        if (dbMatch && m.p1 && m.p2) {
-                            if (m.p1.p1 !== dbMatch.oyuncu1ID || m.p1.p2 !== dbMatch.oyuncu1PartnerID || m.p2.p1 !== dbMatch.oyuncu2ID || m.p2.p2 !== dbMatch.oyuncu2PartnerID) {
-                                m.p1.p1 = dbMatch.oyuncu1ID; m.p1.p2 = dbMatch.oyuncu1PartnerID || null;
-                                m.p2.p1 = dbMatch.oyuncu2ID; m.p2.p2 = dbMatch.oyuncu2PartnerID || null;
-                                hasChanges = true;
+                bracket.forEach(r => {
+                    r.matches.forEach(m => {
+                        if (m.firestoreMatchId && matchUpdatesById[m.firestoreMatchId]) {
+                            const dbm = matchUpdatesById[m.firestoreMatchId];
+                            if(!m.p1) m.p1 = {}; if(!m.p2) m.p2 = {};
+                            
+                            // Oyuncu Kimliklerini Veritabanından Alıp Ağaca Kopyala
+                            m.p1.p1 = dbm.oyuncu1ID; m.p1.p2 = dbm.oyuncu1PartnerID || null;
+                            m.p2.p1 = dbm.oyuncu2ID; m.p2.p2 = dbm.oyuncu2PartnerID || null;
+                            
+                            // Eğer maç bittiyse kazananı da düzelt
+                            if (dbm.durum === 'Tamamlandı' && dbm.kayitliKazananID) {
+                                m.winner = (m.p1.p1 === dbm.kayitliKazananID) ? m.p1 : m.p2;
+                                m.score = "Tamamlandı";
                             }
                         }
                     });
                 });
             }
 
-            // İsim değişikliği varsa turnuvaya kaydet
-            if (hasChanges) { await tourRef.update({ groups: groups, bracket: bracket }); }
+            // Önce isim değişikliklerini turnuvaya kaydet
+            await tourRef.update({ groups: groups, bracket: bracket });
 
-            // 2. Orijinal skor senkronizasyonunu yap (Tamamlananlar için)
+            // 4. Tur Atlatma Motorunu Zorla Çalıştır (Oyun sayılarını ve üst turları düzeltmek için)
             let syncCount = 0;
-            const compSnap = await db.collection('matches').where('tournamentId', '==', tourId).where('durum', '==', 'Tamamlandı').get();
-            for (const doc of compSnap.docs) {
-                const m = doc.data();
-                if (m.matchTag && m.kayitliKazananID) {
+            for (const docId in matchUpdatesById) {
+                const m = matchUpdatesById[docId];
+                if (m.durum === 'Tamamlandı' && m.kayitliKazananID && m.matchTag) {
                     if (typeof window.advanceTournamentBracket === 'function') {
                         await window.advanceTournamentBracket(tourId, m.matchTag, m.kayitliKazananID);
                         syncCount++;
@@ -2391,11 +2401,10 @@ submitChallengeBtn.addEventListener('click', async () => {
                 }
             }
 
-            alert(`Süper Senkronizasyon tamamlandı! Veritabanındaki isim değişiklikleri algılandı ve ${syncCount} maç tabloya işlendi. ✅`);
+            alert(`Süper Senkronizasyon Tamamlandı! \n\nİsimler eşleşti ve ${syncCount} maçın sonucu tabloya başarıyla işlendi. ✅`);
             
             // Sayfayı yenile
-            const tDoc = await db.collection('tournaments').doc(tourId).get();
-            openTournamentDetail(tourId, tDoc.data());
+            openTournamentDetail(tourId, (await tourRef.get()).data());
 
         } catch (e) {
             console.error(e);
