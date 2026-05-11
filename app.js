@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return "Ligde heyecan devam ediyor...";
     }
 
- // --- ROZET KONTROL VE VERME MOTORU (PARTNER DESTEKLİ) ---
+// --- ROZET KONTROL VE VERME MOTORU (GARANTİLİ VERSİYON) ---
     window.checkAndGrantBadges = async function(userId) {
         if(!userId) return [];
         const userRef = db.collection('users').doc(userId);
@@ -355,18 +355,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const check = (id, condition) => { if (!currentBadges.includes(id) && condition) { newBadges.push(id); currentBadges.push(id); } };
         check('newbie', stats.played >= 1); check('first_win', stats.won >= 1); check('veteran', stats.played >= 20); check('champion', userData.toplamPuan >= 3000);
         
-        // Partnerleri de hesaba katarak tüm maçları çek
-        const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-
-        const [s1, s2, s3, s4] = await Promise.all([q1, q2, q3, q4]);
+        // Rozetler için de hatasız çekim yapıyoruz
+        const allMatchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
         let userMatches = [];
-        const pushDoc = (d) => userMatches.push({ ...d.data(), id: d.id });
-        s1.forEach(pushDoc); s2.forEach(pushDoc); s3.forEach(pushDoc); s4.forEach(pushDoc);
+        allMatchesSnap.forEach(doc => {
+            const d = doc.data();
+            if (d.oyuncu1ID === userId || d.oyuncu2ID === userId || d.oyuncu1PartnerID === userId || d.oyuncu2PartnerID === userId) {
+                userMatches.push({ ...d, id: doc.id });
+            }
+        });
         
-        userMatches = userMatches.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i);
         userMatches.sort((a,b) => (a.tarih?.seconds||0) - (b.tarih?.seconds||0));
         
         let streak = 0; let maxStreak = 0;
@@ -1016,21 +1014,20 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         });
     }
 
-// --- OYUNCU (VE PARTNER) İSTATİSTİK HESAPLAMA MOTORU ---
+// --- OYUNCU (VE PARTNER) İSTATİSTİK HESAPLAMA MOTORU (GARANTİLİ VERSİYON) ---
     async function calculateAdvancedStats(userId) {
-        // Kaptan VEYA Partner olarak oynadığı tüm maçları çek
-        const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const q4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-
-        const [s1, s2, s3, s4] = await Promise.all([q1, q2, q3, q4]);
+        // Firebase'i yormadan tüm tamamlanmış maçları çek
+        const allMatchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
         let allMatches = [];
-        const pushDoc = (d) => allMatches.push({ ...d.data(), id: d.id });
-        s1.forEach(pushDoc); s2.forEach(pushDoc); s3.forEach(pushDoc); s4.forEach(pushDoc);
         
-        // Aynı maçın iki kez eklenmesini önle
-        allMatches = allMatches.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i);
+        allMatchesSnap.forEach(doc => {
+            const m = doc.data();
+            // Eşleştirme işlemini (Kaptan veya Partner) kod içinde yapıyoruz
+            if (m.oyuncu1ID === userId || m.oyuncu2ID === userId || m.oyuncu1PartnerID === userId || m.oyuncu2PartnerID === userId) {
+                allMatches.push({ ...m, id: doc.id });
+            }
+        });
+        
         allMatches.sort((a, b) => { const tA = a.tarih ? a.tarih.seconds : 0; const tB = b.tarih ? b.tarih.seconds : 0; return tB - tA; });
 
         let stats = { played: 0, won: 0, setsPlayed: 0, setsWon: 0, gamesPlayed: 0, gamesWon: 0, clay: { played: 0, won: 0 }, hard: { played: 0, won: 0 }, form: [] };
@@ -1038,7 +1035,6 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         allMatches.forEach(m => {
             stats.played++; 
             
-            // Kazanma Mantığı (Kaptan veya Partner olması fark etmez)
             let isWinner = false;
             if (m.kayitliKazananID === userId) isWinner = true; 
             else if (m.kayitliKazananID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) isWinner = true; 
@@ -1055,7 +1051,6 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
                 const s = m.skor; const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp, tb: true}];
                 sets.forEach(set => {
                     let myG = 0, opG = 0;
-                    // Skoru giren kişi benim takım arkadaşım mı?
                     const isMyTeamScore = (m.sonucuGirenID === userId) || 
                                           (m.sonucuGirenID === m.oyuncu1ID && m.oyuncu1PartnerID === userId) ||
                                           (m.sonucuGirenID === m.oyuncu2ID && m.oyuncu2PartnerID === userId);
@@ -1143,20 +1138,23 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
             if (!photosContainer) { photosContainer = document.createElement('div'); photosContainer.id = 'player-stats-photos'; photosContainer.style.marginTop = '20px'; photosContainer.style.borderTop = '1px solid #eee'; photosContainer.style.paddingTop = '15px'; statsContainer.appendChild(photosContainer); }
             photosContainer.innerHTML = '<p style="text-align:center; color:#999; font-size:0.9em;">Fotoğraflar taranıyor...</p>';
 
-            const pq1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-            const pq2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-            const pq3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-            const pq4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-            Promise.all([pq1, pq2, pq3, pq4]).then(snapshots => {
-            
-                let photos = [];
-                snapshots.forEach(snap => { snap.forEach(doc => { const m = doc.data(); if (m.macFotoURL) { photos.push({ ...m, id: doc.id, dateObj: m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : new Date()) }); } }); });
-                photos = photos.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i); photos.sort((a,b) => b.dateObj - a.dateObj);
-                if (photos.length === 0) { photosContainer.innerHTML = '<div style="text-align:center; color:#ccc; font-size:0.8em; margin-top:10px;">Bu oyuncunun maç fotoğrafı yok. 📷</div>'; return; }
-                let galleryHTML = '<h4 style="color:#555; text-align:center; border:none; margin-bottom:10px; font-size:0.9em; text-transform:uppercase;">📸 Maç Kareleri</h4><div class="gallery-grid">';
-                photos.forEach(item => { const dateStr = item.dateObj ? item.dateObj.toLocaleString('tr-TR', { day: 'numeric', month: 'short' }) : ''; galleryHTML += `<div class="gallery-item" onclick="document.getElementById('player-stats-modal').style.display='none'; showMatchDetail('${item.id}')"><img src="${item.macFotoURL}" class="gallery-img" loading="lazy"><div class="gallery-date-badge">${dateStr}</div></div>`; });
-                galleryHTML += '</div>'; photosContainer.innerHTML = galleryHTML;
+ // Fotoğrafları hatasız çekme
+            const photoSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+            let photos = [];
+            photoSnap.forEach(doc => {
+                const m = doc.data();
+                if (m.oyuncu1ID === userId || m.oyuncu2ID === userId || m.oyuncu1PartnerID === userId || m.oyuncu2PartnerID === userId) {
+                    if (m.macFotoURL) {
+                        photos.push({ ...m, id: doc.id, dateObj: m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : new Date()) });
+                    }
+                }
             });
+            photos.sort((a,b) => b.dateObj - a.dateObj);
+            
+            if (photos.length === 0) { photosContainer.innerHTML = '<div style="text-align:center; color:#ccc; font-size:0.8em; margin-top:10px;">Bu oyuncunun maç fotoğrafı yok. 📷</div>'; return; }
+            let galleryHTML = '<h4 style="color:#555; text-align:center; border:none; margin-bottom:10px; font-size:0.9em; text-transform:uppercase;">📸 Maç Kareleri</h4><div class="gallery-grid">';
+            photos.forEach(item => { const dateStr = item.dateObj ? item.dateObj.toLocaleString('tr-TR', { day: 'numeric', month: 'short' }) : ''; galleryHTML += `<div class="gallery-item" onclick="document.getElementById('player-stats-modal').style.display='none'; showMatchDetail('${item.id}')"><img src="${item.macFotoURL}" class="gallery-img" loading="lazy"><div class="gallery-date-badge">${dateStr}</div></div>`; });
+            galleryHTML += '</div>'; photosContainer.innerHTML = galleryHTML;
 
         } catch (error) { console.error("İstatistik hatası:", error); document.getElementById('stats-form-badges').innerHTML = '<span style="color:red; font-size:0.8em;">Veri alınamadı</span>'; }
     }
