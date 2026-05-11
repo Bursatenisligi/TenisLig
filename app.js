@@ -2552,6 +2552,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                 </div>
 
                 <button onclick="syncTournamentMatches('${tourId}')" style="background:none; border:none; color:#17a2b8; text-decoration:underline; width:100%; margin-top:15px; font-weight:bold; box-shadow:none;">🔄 Hatalı Onaylanan Maçları Senkronize Et</button>
+                <button onclick="window.recalculateAllPoints()" style="background:none; border:none; color:#28a745; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🛠️ Tüm Ligin Puanlarını Sıfırdan Onar</button>
                 <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
             `;
             
@@ -3710,13 +3711,5 @@ submitChallengeBtn.addEventListener('click', async () => {
         }
     };
 
-    // SIRALAMA SEKMESİNE ONARIM BUTONU EKLEME
-    const rankTab = document.getElementById('tab-rankings');
-    if (rankTab) {
-        const fixBtn = document.createElement('button');
-        fixBtn.innerHTML = "🛠️ Tüm Puanları Sıfırdan Onar (Manuel Değişiklikler İçin)";
-        fixBtn.style.cssText = "width:100%; background:#17a2b8; color:white; border:none; padding:10px; border-radius:8px; margin-top:20px; font-weight:bold; cursor:pointer;";
-        fixBtn.onclick = window.recalculateAllPoints;
-        rankTab.appendChild(fixBtn);
-    }
+  
 }); // DOMContentLoaded SONU
