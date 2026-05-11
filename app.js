@@ -2556,32 +2556,7 @@ submitChallengeBtn.addEventListener('click', async () => {
                 }
             }
 
-            // EKRANA ÇİZ
-            adminArea.innerHTML = `
-                <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
-                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-                    ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
-                    ${actionButtonsHTML}
-                </div>
-                ${groupFinishHTML} <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
-                    <label class="input-label">Oyuncu 1</label>
-                    <select id="admin-p1-select"></select>
-                    ${tourData.format === 'Çiftler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
-                    <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
-                </div>
-                
-                <div id="group-settings-area" style="display:none; background:#e3f2fd; padding:15px; border-radius:8px; margin-top:10px; border:1px solid #bbdefb;">
-                    <label class="input-label" style="color:#0d47a1; font-weight:bold;">Grup Başına Ortalama Oyuncu (Örn: 4)</label>
-                    <input type="number" id="group-size-input" value="4" min="2" style="padding:8px; margin-bottom:10px;">
-                    
-                    <label class="input-label" style="color:#0d47a1; font-weight:bold;">Gruptan Kaç Kişi Üst Tura Çıkacak? (Örn: 2)</label>
-                    <input type="number" id="advancing-count-input" value="2" min="1" style="padding:8px; margin-bottom:10px;">
-                    
-                    <button onclick="generateGroupStageDraw('${tourId}')" class="btn-save" style="margin-top:5px; background:#007bff;">Grupları Oluştur ve Başlat 🚀</button>
-                </div>
 
-                <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:15px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
-            `;
             
             const btnAdd = document.getElementById('btn-admin-add-player');
             if(btnAdd) btnAdd.onclick = () => {
