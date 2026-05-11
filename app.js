@@ -1397,37 +1397,33 @@ function showMatchDetail(matchDocId) {
                 scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${userMap[match.kayitliKazananID]?.isim}</strong></p></div>`;
             }
 
-          const shareMatchBtn = document.getElementById('btn-share-match-detail');
+const shareMatchBtn = document.getElementById('btn-share-match-detail');
             if (shareMatchBtn) {
                 const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
                 newShareBtn.innerHTML = '📸 Instagram\'da Paylaş'; newShareBtn.style.background = 'linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d)';
                 
-                newShareBtn.addEventListener('click', async () => {
+newShareBtn.addEventListener('click', async () => {
+                    // YENİ: LİNKİ OTOMATİK KOPYALA VE UYARI VER
+                    try { await navigator.clipboard.writeText("https://bursatenisligi.github.io/TenisLig/"); } catch(e) {}
+                    alert("Sitenin linki panoya (hafızaya) kopyalandı! 📋\n\nResim oluştuktan sonra Instagram hikayenize eklerken 'Çıkartmalar' menüsünden 'Bağlantı' aracını seçip kopyalanan linki direkt yapıştırabilirsiniz.");
+
                     let finalMatchData = null; try { if (typeof match !== 'undefined') finalMatchData = match; } catch (e) {}
                     if (!finalMatchData && typeof currentMatchDocId !== 'undefined' && currentMatchDocId) { try { const doc = await db.collection('matches').doc(currentMatchDocId).get(); finalMatchData = doc.data(); } catch (err) { console.error(err); } }
                     if (!finalMatchData) { alert("Veri yüklenemedi, lütfen sayfayı yenileyin."); return; }
 
                     const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQuNjE1IDAgMjU2IDB6Ii8+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMyIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIGQ9Ik0zMzkuMzQ4IDEwOC41NDVjLTQ3LjA2IDUwLjI3Mi03NS45NjIgMTE4LjE1NS03NS45NjIgMTkyLjQ1NXM4MS45NDcgMTM3LjUzNyAxMzUuMTY0IDE4Mi42MzZNMzcuNTg2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
                     
-                    // --- OYUNCU BİLGİLERİNİ TOPLAMA ---
                     const getU = (id) => userMap[id] || { isim: 'Bilinmeyen', fotoURL: 'https://via.placeholder.com/150' };
-                    const p1 = getU(finalMatchData.oyuncu1ID);
-                    const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
-                    const p2 = getU(finalMatchData.oyuncu2ID);
-                    const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
-                    
-                    const isDoubles = finalMatchData.macFormati === 'Çiftler';
+                    const p1 = getU(finalMatchData.oyuncu1ID); const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
+                    const p2 = getU(finalMatchData.oyuncu2ID); const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
                     
                     let team1Name = p1.isim; if(p1p) team1Name += ` & ${p1p.isim}`;
                     let team2Name = p2.isim; if(p2p) team2Name += ` & ${p2p.isim}`;
                     
-                    // --- KAZANANLARI BELİRLEME ---
                     const wid = finalMatchData.kayitliKazananID || finalMatchData.adayKazananID; 
-                    let winnerTeam = "?";
-                    let isTeam1Winner = (wid === finalMatchData.oyuncu1ID);
+                    let winnerTeam = "?"; let isTeam1Winner = (wid === finalMatchData.oyuncu1ID);
                     if (wid) { winnerTeam = isTeam1Winner ? team1Name : team2Name; }
                     
-                    // --- SKORU TOPLAMA ---
                     let scoreText = "Skor Yok"; 
                     if (finalMatchData.skor) { 
                         const s = finalMatchData.skor; 
@@ -1438,51 +1434,58 @@ function showMatchDetail(matchDocId) {
                         if(scoreText.startsWith(', ')) scoreText = scoreText.substring(2);
                     }
 
-                    const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
-                    let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
-                    
-                    // KAZANAN AVATARLARI HTML'İ (Çiftlerse ikisi de çıkar)
-                    let winnerAvatarsHTML = '';
-                    if (isTeam1Winner) {
-                        winnerAvatarsHTML = `<img src="${p1.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:5px solid #fff; object-fit:cover; margin-right:${p1p?'-40px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.2);">`;
-                        if(p1p) winnerAvatarsHTML += `<img src="${p1p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:5px solid #fff; object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.2);">`;
-                    } else {
-                        winnerAvatarsHTML = `<img src="${p2.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:5px solid #fff; object-fit:cover; margin-right:${p2p?'-40px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.2);">`;
-                        if(p2p) winnerAvatarsHTML += `<img src="${p2p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:5px solid #fff; object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.2);">`;
+                    let matchBadgeHTML = '';
+                    if (finalMatchData.macTipi === 'Turnuva' && finalMatchData.tournamentId) {
+                        try {
+                            const tDoc = await db.collection('tournaments').doc(finalMatchData.tournamentId).get();
+                            if(tDoc.exists) { matchBadgeHTML = `<div style="background:rgba(255,255,255,0.25); padding:15px 40px; border-radius:40px; margin-top:20px; font-size:2.2em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3); color:#fff; text-shadow:0 2px 5px rgba(0,0,0,0.5);">🏆 ${tDoc.data().name}</div>`; }
+                        } catch(e) {}
                     }
 
-                    // YENİ GÖRSEL TASARIMI (1080x1920 IG Story Formatı)
+                    const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
+                    let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
+                    let isDoubles = finalMatchData.macFormati === 'Çiftler';
+                    
+                    let winnerAvatarsHTML = '';
+                    if (isTeam1Winner) {
+                        winnerAvatarsHTML = `<img src="${p1.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; margin-right:${p1p?'-30px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
+                        if(p1p) winnerAvatarsHTML += `<img src="${p1p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
+                    } else {
+                        winnerAvatarsHTML = `<img src="${p2.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; margin-right:${p2p?'-30px':'0'}; z-index:2; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
+                        if(p2p) winnerAvatarsHTML += `<img src="${p2p.fotoURL}" style="width:120px; height:120px; border-radius:50%; border:4px solid rgba(255,255,255,0.5); object-fit:cover; z-index:1; position:relative; box-shadow:0 5px 15px rgba(0,0,0,0.4);">`;
+                    }
+
                     const cardStyle = "width: 1080px; height: 1920px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); position: fixed; top: -5000px; left: 0; font-family: 'Poppins', sans-serif; display:flex; flex-direction:column; padding: 100px 80px; box-sizing:border-box; color:white; justify-content:space-between; align-items:center; text-align:center;";
+                    
+                    // YENİ: Alt kısımdaki yönlendirme butonu (Link Sticker alanı)
+                    const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.5); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.5); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👆 Sıralama ve Detaylar İçin Linke Tıkla 👆</div>`;
 
                     let innerContent = '';
-
                     if (hasPhoto) {
                         innerContent = `
                         <div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;">
-                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.95) 100%); z-index:1;"></div>
+                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%); z-index:1;"></div>
                             <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
                                 <div style="display:flex; flex-direction:column; align-items:center;">
                                     <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px;">
-                                    <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.5);">MAÇ SONUCU</h1>
-                                    <div style="background:rgba(255,255,255,0.25); padding:15px 40px; border-radius:40px; margin-top:20px; font-size:2.2em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3);">${isDoubles ? '👥 Çiftler Ligi' : '👤 Tekler Ligi'}</div>
+                                    <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.6);">MAÇ SONUCU</h1>
+                                    ${matchBadgeHTML}
                                 </div>
                                 <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
                                     <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.6);">${team1Name}</div>
                                     <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.8);">VS</div>
                                     <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.6);">${team2Name}</div>
                                 </div>
-                                <div style="background:rgba(255,255,255,0.95); color:#333; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
-                                    <h3 style="margin:0 0 30px 0; color:#c06035; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px;">🏆 KAZANAN</h3>
-                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">
-                                        ${winnerAvatarsHTML}
-                                    </div>
-                                    <div style="font-size:3.2em; font-weight:900; margin-bottom:40px; line-height:1.2; color:#1e3c72;">${winnerTeam}</div>
-                                    <div style="border-top:3px dashed #ccc; padding-top:40px;">
-                                        <div style="font-size:2.2em; color:#777; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                        <div style="font-size:6em; font-weight:900; color:#28a745; letter-spacing:5px; line-height:1;">${scoreText}</div>
+                                <div style="background:rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 2px solid rgba(255,255,255,0.15); color:#fff; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                                    <h3 style="margin:0 0 30px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
+                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">${winnerAvatarsHTML}</div>
+                                    <div style="font-size:3.2em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 2px 8px rgba(0,0,0,0.5);">${winnerTeam}</div>
+                                    <div style="border-top:2px dashed rgba(255,255,255,0.2); padding-top:40px;">
+                                        <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600;">SKOR</div>
+                                        <div style="font-size:6em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 4px 10px rgba(0,0,0,0.6);">${scoreText}</div>
                                     </div>
                                 </div>
-                                <div style="font-size:2.2em; opacity:0.9; letter-spacing:4px; font-weight:600; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">tenisligi.app</div>
+                                ${ctaHTML}
                             </div>
                         </div>`;
                     } else {
@@ -1492,25 +1495,23 @@ function showMatchDetail(matchDocId) {
                                 <div style="display:flex; flex-direction:column; align-items:center;">
                                     <img src="${SAFE_LOGO}" style="width:180px; height:180px; margin-bottom:30px;">
                                     <h1 style="margin:0; font-size:5.5em; font-weight:900; letter-spacing:4px; text-shadow: 0 5px 15px rgba(0,0,0,0.4);">MAÇ SONUCU</h1>
-                                    <div style="background:rgba(255,255,255,0.2); padding:15px 40px; border-radius:40px; margin-top:30px; font-size:2.5em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3);">${isDoubles ? '👥 Çiftler Ligi' : '👤 Tekler Ligi'}</div>
+                                    ${matchBadgeHTML}
                                 </div>
                                 <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
                                     <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team1Name}</div>
                                     <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div>
                                     <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2Name}</div>
                                 </div>
-                                <div style="background:rgba(255,255,255,1); color:#333; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-                                    <h3 style="margin:0 0 30px 0; color:#c06035; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px;">🏆 KAZANAN</h3>
-                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">
-                                        ${winnerAvatarsHTML}
-                                    </div>
-                                    <div style="font-size:3.5em; font-weight:900; margin-bottom:40px; line-height:1.2; color:#1e3c72;">${winnerTeam}</div>
-                                    <div style="border-top:4px dashed #eee; padding-top:40px;">
-                                        <div style="font-size:2.2em; color:#777; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                        <div style="font-size:6.5em; font-weight:900; color:#1e3c72; letter-spacing:5px; line-height:1;">${scoreText}</div>
+                                <div style="background:rgba(255,255,255,0.15); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 2px solid rgba(255,255,255,0.2); color:#fff; padding:60px 40px; border-radius:50px; width:95%; box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+                                    <h3 style="margin:0 0 30px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">🏆 KAZANAN</h3>
+                                    <div style="display:flex; justify-content:center; align-items:center; margin-bottom:30px;">${winnerAvatarsHTML}</div>
+                                    <div style="font-size:3.5em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 2px 8px rgba(0,0,0,0.3);">${winnerTeam}</div>
+                                    <div style="border-top:3px dashed rgba(255,255,255,0.3); padding-top:40px;">
+                                        <div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div>
+                                        <div style="font-size:6.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${scoreText}</div>
                                     </div>
                                 </div>
-                                <div style="font-size:2.2em; opacity:0.9; letter-spacing:4px; font-weight:600; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">tenisligi.app</div>
+                                ${ctaHTML}
                             </div>
                         </div>`;
                     }
