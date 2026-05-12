@@ -1558,10 +1558,11 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
         try { await firebase.firestore().collection('matches').doc(matchId).update(updateData); alert("Düzeltme başarıyla gönderildi! Şimdi rakibinin onayı bekleniyor. 🔄"); showMatchDetail(matchId); } catch (e) { console.error("Güncelleme Hatası:", e); alert("Değişiklik kaydedilirken bir hata oluştu."); }
     }
 
-// --- YÖNETİCİ: GRUPLARI VE ELEME AĞACINI (YER TUTUCULARLA) AYNI ANDA OLUŞTURUCU ---
+// --- GRUPLARI VE FİKSTÜRÜ AYNI ANDA OLUŞTURAN TEK MOTOR ---
     window.generateGroupStageDraw = async function(tourId) {
         const groupSizeInput = document.getElementById('group-size-input');
         const advancingCountInput = document.getElementById('advancing-count-input');
+
         const targetGroupSize = parseInt(groupSizeInput?.value) || 4;
         const advancingCount = parseInt(advancingCountInput?.value) || 2;
 
@@ -1574,13 +1575,14 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
             if (participants.length < 3) return alert("Grup aşaması için en az 3 kişi gerekli!");
 
             const numGroups = Math.max(1, Math.round(participants.length / targetGroupSize));
-            if (advancingCount >= Math.floor(participants.length / numGroups)) {
-                return alert("Gruptan çıkacak kişi sayısı grup mevcudundan küçük olmalıdır!");
+            const minCalculatedSize = Math.floor(participants.length / numGroups);
+
+            if (advancingCount >= minCalculatedSize) {
+                return alert(`Dağılım sonrası hesaplanan en küçük grup ${minCalculatedSize} kişi oluyor. Gruptan çıkacak kişi sayısı (${advancingCount}) bundan kesinlikle küçük olmalıdır!`);
             }
 
-            if (!confirm(`${numGroups} Grup oluşturulacak ve Eleme Ağacı (A1-B2 vb.) hemen belirlenecek. Onaylıyor musunuz?`)) return;
+            if (!confirm(`Tüm oyuncular ${numGroups} adet gruba dağıtılacak ve ilk ${advancingCount} kişi eleme turuna çıkacak. Fikstür hemen oluşturulacak. Onaylıyor musunuz?`)) return;
 
-            // 1. Grupları Oluştur (Snake Sistemi)
             let players = [...participants].map(p => {
                  let pts = userMap[p.p1]?.toplamPuan || 0;
                  if (tourData.format === 'Çiftler' && p.p2) pts += (userMap[p.p2]?.toplamPuan || 0);
@@ -1593,40 +1595,32 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
             }));
 
             players.forEach((player, i) => {
-                let row = Math.floor(i / numGroups);
-                let col = i % numGroups;
+                let row = Math.floor(i / numGroups); let col = i % numGroups;
                 let targetGroupIndex = (row % 2 === 0) ? col : (numGroups - 1 - col);
                 groups[targetGroupIndex].players.push({ ...player, played: 0, won: 0, lost: 0, gamesWon: 0, gamesLost: 0, winRate: 0, groupPoints: 0 });
             });
 
-            // 2. Grup Maçlarını Firestore'da oluştur
             for (let g = 0; g < groups.length; g++) {
                 let p = groups[g].players; let matchCount = 1;
                 for (let i = 0; i < p.length; i++) {
                     for (let j = i + 1; j < p.length; j++) {
-                        const mId = await createTournamentMatchDoc(tourId, p[i], p[j], groups[g].groupName, `G${g}_M${matchCount}`);
-                        groups[g].matches.push({ matchId: `G${g}_M${matchCount}`, firestoreMatchId: mId, p1: p[i], p2: p[j], winner: null, score: null });
+                        let p1 = p[i]; let p2 = p[j];
+                        const mId = await window.createTournamentMatchDoc(tourId, p1, p2, groups[g].groupName, `G${g}_M${matchCount}`);
+                        groups[g].matches.push({ matchId: `G${g}_M${matchCount}`, firestoreMatchId: mId, p1: p1, p2: p2, winner: null, score: null });
                         matchCount++;
                     }
                 }
             }
 
-            // 3. ELEME AĞACI SKELETİNİ OLUŞTUR (YER TUTUCULARLA)
             const totalAdvancing = numGroups * advancingCount;
             const bracketSize = Math.pow(2, Math.ceil(Math.log2(totalAdvancing)));
             
-            // Yer tutucuları hazırla (Örn: A1, B2, C1...)
             let placeholders = [];
             for(let g=0; g<numGroups; g++) {
-                for(let r=1; r<=advancingCount; r++) {
-                    placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r });
-                }
+                for(let r=1; r<=advancingCount; r++) { placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r }); }
             }
-            // BAY'ları ekle
             while(placeholders.length < bracketSize) { placeholders.push({ isBye: true }); }
 
-            // Dünya kupası tarzı çapraz eşleşme (A1 vs B2, C1 vs D2 vb.)
-            // Basitlik için: Liste başı ile sonu, sonraki ikili şeklinde (Seeded Order)
             function getSeededOrder(size) {
                 if (size <= 1) return [1]; const half = getSeededOrder(size / 2); const res = [];
                 for (let i = 0; i < half.length; i++) { res.push(half[i]); res.push(size - half[i] + 1); } return res;
@@ -1640,26 +1634,34 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
                 rounds.push({ roundName: rName, matches: mList }); currentSize /= 2; rNum++;
             }
 
-            // Yer tutucuları ağacın 1. Turuna yerleştir
             for (let i = 0; i < bracketSize; i += 2) {
                 const mIdx = i / 2;
                 rounds[0].matches[mIdx].p1 = placeholders[order[i]-1];
                 rounds[0].matches[mIdx].p2 = placeholders[order[i+1]-1];
                 
-                // Eğer biri BAY ise otomatik atlatma
                 if (rounds[0].matches[mIdx].p1.isBye || rounds[0].matches[mIdx].p2.isBye) {
                     const autoWinner = rounds[0].matches[mIdx].p1.isBye ? rounds[0].matches[mIdx].p2 : rounds[0].matches[mIdx].p1;
-                    rounds[0].matches[mIdx].winner = autoWinner;
-                    rounds[0].matches[mIdx].score = "Oynamadan Geçti";
+                    rounds[0].matches[mIdx].winner = autoWinner; rounds[0].matches[mIdx].score = "Oynamadan Geçti";
                     const nextMIdx = Math.floor(mIdx / 2);
                     if (mIdx % 2 === 0) rounds[1].matches[nextMIdx].p1 = autoWinner; else rounds[1].matches[nextMIdx].p2 = autoWinner;
                 }
             }
 
-            await docRef.update({ status: 'Devam Ediyor', stage: 'Grup', groups: groups, bracket: rounds, advancingCount: advancingCount });
-            alert("Gruplar ve Fikstür Yapısı Oluşturuldu! 🎾");
+            await docRef.update({
+                status: 'Devam Ediyor', stage: 'Grup', targetGroupSize: targetGroupSize, advancingCount: advancingCount, groups: groups, bracket: rounds
+            });
+
+            participants.forEach(p => {
+                const subject = "🏆 Turnuva Grupları Belli Oldu!";
+                const body = `<p>Katıldığınız <strong>${tourData.name}</strong> turnuvasında gruplar oluşturuldu.</p><p>Hemen uygulamaya girip bulunduğunuz grubu ve rakiplerinizi inceleyebilirsiniz!</p>`;
+                if (p.p1) sendNotificationEmail(p.p1, subject, body);
+                if (p.p2) sendNotificationEmail(p.p2, subject, body);
+            });
+
+            alert("Gruplar ve Fikstür Yapısı başarıyla oluşturuldu! 🏆");
             openTournamentDetail(tourId, (await docRef.get()).data());
-        } catch (e) { console.error(e); alert("Hata: " + e.message); }
+
+        } catch (e) { console.error(e); alert("Gruplar oluşturulurken hata: " + e.message); }
     };
 function goBackToList() {
         matchInteractionListeners.forEach(unsubscribe => unsubscribe()); matchInteractionListeners = [];
@@ -2934,6 +2936,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
     };
 
 // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
+   // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
     window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         const tourRef = db.collection('tournaments').doc(tourId);
         const tourSnap = await tourRef.get();
@@ -3276,103 +3279,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             if (typeof loadLeaderboard === 'function') loadLeaderboard();
         } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
     };
-    window.generateGroupStageDraw = async function(tourId) {
-        const groupSizeInput = document.getElementById('group-size-input');
-        const advancingCountInput = document.getElementById('advancing-count-input');
 
-        const targetGroupSize = parseInt(groupSizeInput?.value) || 4;
-        const advancingCount = parseInt(advancingCountInput?.value) || 2;
-
-        try {
-            const docRef = db.collection('tournaments').doc(tourId);
-            const tourSnap = await docRef.get();
-            const tourData = tourSnap.data();
-            const participants = tourData.participants || [];
-
-            if (participants.length < 3) return alert("Grup aşaması için en az 3 kişi gerekli!");
-
-            const numGroups = Math.max(1, Math.round(participants.length / targetGroupSize));
-            const minCalculatedSize = Math.floor(participants.length / numGroups);
-
-            if (advancingCount >= minCalculatedSize) {
-                return alert(`Dağılım sonrası hesaplanan en küçük grup ${minCalculatedSize} kişi oluyor. Gruptan çıkacak kişi sayısı (${advancingCount}) bundan kesinlikle küçük olmalıdır!`);
-            }
-
-            if (!confirm(`Tüm oyuncular ${numGroups} adet gruba (Yılan sistemiyle adil olarak) dağıtılacak ve ilk ${advancingCount} kişi eleme turuna çıkacak. Onaylıyor musunuz?`)) return;
-
-            let players = [...participants].map(p => {
-                 let pts = userMap[p.p1]?.toplamPuan || 0;
-                 if (tourData.format === 'Çiftler' && p.p2) pts += (userMap[p.p2]?.toplamPuan || 0);
-                 return { ...p, points: pts };
-            });
-            players.sort((a, b) => b.points - a.points);
-
-            let groups = Array.from({ length: numGroups }, (_, i) => ({
-                groupId: i,
-                groupName: 'Grup ' + String.fromCharCode(65 + i), 
-                players: [],
-                matches: []
-            }));
-
-            players.forEach((player, i) => {
-                let row = Math.floor(i / numGroups);
-                let col = i % numGroups;
-                let targetGroupIndex = (row % 2 === 0) ? col : (numGroups - 1 - col);
-                
-                groups[targetGroupIndex].players.push({
-                    ...player, played: 0, won: 0, lost: 0, gamesWon: 0, gamesLost: 0, winRate: 0
-                });
-            });
-
-            for (let g = 0; g < groups.length; g++) {
-                let group = groups[g];
-                let p = group.players;
-                let matchCount = 1;
-                
-                for (let i = 0; i < p.length; i++) {
-                    for (let j = i + 1; j < p.length; j++) {
-                        let p1 = p[i];
-                        let p2 = p[j];
-
-                        const mId = await createTournamentMatchDoc(tourId, p1, p2, group.groupName, `G${g}_M${matchCount}`);
-
-                        group.matches.push({
-                            matchId: `G${g}_M${matchCount}`,
-                            firestoreMatchId: mId,
-                            p1: p1,
-                            p2: p2,
-                            winner: null,
-                            score: null
-                        });
-                        matchCount++;
-                    }
-                }
-            }
-
-            // Veritabanını Güncelle
-            await docRef.update({
-                status: 'Devam Ediyor',
-                stage: 'Grup', 
-                targetGroupSize: targetGroupSize,
-                advancingCount: advancingCount,
-                groups: groups
-            });
-
-            // YENİ: TÜM KATILIMCILARA GRUPLAR OLUŞTU BİLDİRİMİ AT
-            participants.forEach(p => {
-                const subject = "🏆 Turnuva Grupları Belli Oldu!";
-                const body = `<p>Katıldığınız <strong>${tourData.name}</strong> turnuvasında gruplar oluşturuldu.</p><p>Hemen uygulamaya girip bulunduğunuz grubu ve rakiplerinizi inceleyebilirsiniz!</p>`;
-                if (p.p1) sendNotificationEmail(p.p1, subject, body);
-                if (p.p2) sendNotificationEmail(p.p2, subject, body);
-            });
-
-            alert("Gruplar başarıyla oluşturuldu, katılımcılara mail gönderildi! 🏆");
-            openTournamentDetail(tourId, (await docRef.get()).data());
-
-        } catch (e) {
-            console.error(e); alert("Gruplar oluşturulurken hata: " + e.message);
-        }
-    };
     window.generateKnockoutDraw = async function(tourId, isDirect = true) {
         if (!confirm("Kura çekilecek ve gerçek maç dökümanları oluşturulacak. Onaylıyor musunuz?")) return;
         try {
