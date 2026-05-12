@@ -2936,7 +2936,6 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
     };
 
 // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
-   // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
     window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         const tourRef = db.collection('tournaments').doc(tourId);
         const tourSnap = await tourRef.get();
@@ -3008,19 +3007,23 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
             });
 
-            // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI GÜNCELLE ---
+            // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI (Sırayla ve Garantili) GÜNCELLE ---
             if (bracket.length > 0) {
                 const advCount = data.advancingCount || 2;
                 const topPlayers = group.players.slice(0, advCount);
                 
-                bracket[0].matches.forEach(async (m, mIdx) => {
-                    const updateSlot = async (slotKey) => {
-                        const slot = m[slotKey];
+                for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                    let m = bracket[0].matches[mIdx];
+                    
+                    // Veritabanı atlamalarını önlemek için klasik for döngüsü kullanıldı
+                    for (let slotKey of ['p1', 'p2']) {
+                        let slot = m[slotKey];
                         if (slot && slot.isPlaceholder && slot.groupIdx === gIdx) {
                             const currentPlayer = topPlayers[slot.rank - 1];
                             if (currentPlayer) {
                                 if (slot.p1 !== currentPlayer.p1) {
                                     m[slotKey] = { ...slot, ...currentPlayer }; 
+                                    
                                     if (m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
                                         if (!m.firestoreMatchId) {
                                             m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`);
@@ -3034,9 +3037,8 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                                 }
                             }
                         }
-                    };
-                    await updateSlot('p1'); await updateSlot('p2');
-                });
+                    }
+                }
             }
 
             await tourRef.update({ groups: groups, bracket: bracket });
