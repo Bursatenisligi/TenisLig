@@ -2943,13 +2943,63 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         let mData = null;
         if (!matchQuery.empty) mData = matchQuery.docs[0].data();
 
-// A. GRUP MAÇI (Sıralama ve Ağacı Canlı Güncelle)
+        // A. GRUP MAÇI (Sıralama ve Ağacı Canlı Güncelle)
         if (matchTag.startsWith('G')) {
             let groups = data.groups;
             let bracket = data.bracket || [];
-            // ... (mevcut puan hesaplama kodların aynı kalsın: group.players.forEach ve group.matches.forEach bloğu)
+            const parts = matchTag.split('_');
+            const gIdx = parseInt(parts[0].replace('G',''));
+            const group = groups[gIdx];
             
-            // Grupları sırala
+            const matchIndexInArray = group.matches.findIndex(m => m.matchId === matchTag);
+            if(matchIndexInArray === -1) return;
+            const mObj = group.matches[matchIndexInArray];
+            
+            const winnerObj = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
+            mObj.winner = winnerObj;
+            mObj.score = "Tamamlandı"; 
+            if (mData && mData.skor) {
+                mObj.rawScore = mData.skor;
+                mObj.reporterId = mData.sonucuGirenID;
+            }
+            
+            group.players.forEach(p => { p.played = 0; p.won = 0; p.lost = 0; p.gamesWon = 0; p.gamesLost = 0; p.winRate = 0; p.groupPoints = 0; });
+            
+            group.matches.forEach(m => {
+                if (m.winner && m.rawScore) {
+                    const s = m.rawScore;
+                    const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
+                    const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
+                    
+                    const p1G = s1m + s2m; 
+                    const p2G = s1o + s2o;
+                    
+                    const p1Id = m.p1.p1; const p2Id = m.p2.p1;
+                    const p1Player = group.players.find(p => p.p1 === p1Id);
+                    const p2Player = group.players.find(p => p.p1 === p2Id);
+                    
+                    if (p1Player && p2Player) {
+                        p1Player.played++; p2Player.played++;
+                        p1Player.gamesWon += p1G; p1Player.gamesLost += p2G;
+                        p2Player.gamesWon += p2G; p2Player.gamesLost += p1G;
+                        
+                        if (m.winner.p1 === p1Id) { 
+                            p1Player.won++; p2Player.lost++; 
+                            p1Player.groupPoints += 3; p2Player.groupPoints += 1;
+                        }
+                        else { 
+                            p2Player.won++; p1Player.lost++; 
+                            p2Player.groupPoints += 3; p1Player.groupPoints += 1;
+                        }
+                    }
+                }
+            });
+
+            group.players.forEach(p => {
+                const totalGames = p.gamesWon + p.gamesLost;
+                p.winRate = totalGames > 0 ? (p.gamesWon / totalGames) * 100 : 0;
+            });
+            
             group.players.sort((a, b) => {
                 if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
                 return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
@@ -2966,16 +3016,12 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                         if (slot && slot.isPlaceholder && slot.groupIdx === gIdx) {
                             const currentPlayer = topPlayers[slot.rank - 1];
                             if (currentPlayer) {
-                                // Eğer o yerdeki oyuncu değişmişse güncelle
                                 if (slot.p1 !== currentPlayer.p1) {
-                                    m[slotKey] = { ...slot, ...currentPlayer }; // Kimlik bilgilerini yer tutucuya kopyala
-                                    
-                                    // Eğer her iki taraf da artık gerçek oyuncuysa Firestore maçını aç/güncelle
+                                    m[slotKey] = { ...slot, ...currentPlayer }; 
                                     if (m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
                                         if (!m.firestoreMatchId) {
-                                            m.firestoreMatchId = await createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`);
+                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`);
                                         } else {
-                                            // Mevcut maçı yeni oyuncularla güncelle
                                             await db.collection('matches').doc(m.firestoreMatchId).update({
                                                 oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null,
                                                 oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null
@@ -2991,8 +3037,16 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             }
 
             await tourRef.update({ groups: groups, bracket: bracket });
-            // ... (mail gönderme kodun devam etsin)
-            return;
+
+            const subject = "📊 Grubunda Yeni Maç Sonucu!";
+            const body = `<p><strong>${data.name}</strong> turnuvasında, bulunduğun <strong>${group.groupName}</strong> grubunda yeni bir maç sonuçlandı.</p><p>Puan durumu güncellendi. Sıralamanı kontrol etmek için uygulamaya gir!</p>`;
+            group.players.forEach(p => {
+                if (p.p1 !== mObj.p1.p1 && p.p1 !== mObj.p2.p1) {
+                    if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
+                    if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
+                }
+            });
+            return; 
         }
 
         // B. ELEME MAÇI (Fikstür Atlatma ve Bildirimler)
