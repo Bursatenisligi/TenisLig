@@ -3521,7 +3521,7 @@ const getPlayerFullName = (p) => {
             
             return name;
         };
-        // YENİ: LİG SİSTEMİ TABLOSU VE FİKSTÜRÜ ÇİZİMİ
+ // YENİ: LİG SİSTEMİ TABLOSU VE FİKSTÜRÜ ÇİZİMİ
         if (tourData.systemType === 'league' && tourData.bracket) {
             const isIndividual = (tourData.standingsType === 'individual' || tourData.regType === 'auto');
             let stats = {};
@@ -3534,7 +3534,7 @@ const getPlayerFullName = (p) => {
                     const p1Id = isIndividual ? m.p1.p1 : m.p1.p1 + "_" + (m.p1.p2 || '');
                     const p2Id = isIndividual ? m.p2.p1 : m.p2.p1 + "_" + (m.p2.p2 || '');
                     
-                    const addStat = (id, obj) => { if(!stats[id]) stats[id] = { name: getPlayerFullName(obj), pld: 0, w: 0, l: 0, pts: 0 }; };
+                    const addStat = (id, obj) => { if(!stats[id]) stats[id] = { name: getPlayerFullName(obj), pld: 0, w: 0, l: 0, pts: 0, gw: 0, gl: 0, rate: 0 }; };
                     addStat(p1Id, m.p1); addStat(p2Id, m.p2);
                     if(isIndividual && m.p1.p2) addStat(m.p1.p2, {p1: m.p1.p2});
                     if(isIndividual && m.p2.p2) addStat(m.p2.p2, {p1: m.p2.p2});
@@ -3543,6 +3543,7 @@ const getPlayerFullName = (p) => {
                         const winId1 = isIndividual ? m.winner.p1 : m.winner.p1 + "_" + (m.winner.p2 || '');
                         const losId1 = (m.winner.p1 === m.p1.p1) ? (isIndividual ? m.p2.p1 : m.p2.p1 + "_" + (m.p2.p2 || '')) : (isIndividual ? m.p1.p1 : m.p1.p1 + "_" + (m.p1.p2 || ''));
                         
+                        // Maç Puanlarını Ekle
                         stats[winId1].pld++; stats[winId1].w++; stats[winId1].pts += 3;
                         stats[losId1].pld++; stats[losId1].l++; stats[losId1].pts += 1;
 
@@ -3551,11 +3552,35 @@ const getPlayerFullName = (p) => {
                             const losId2 = (m.winner.p1 === m.p1.p1) ? m.p2.p2 : m.p1.p2;
                             stats[losId2].pld++; stats[losId2].l++; stats[losId2].pts += 1;
                         }
+
+                        // Oyun (Game) Averajlarını Hesapla
+                        let p1G = 0; let p2G = 0;
+                        if (m.rawScore) {
+                            const s = m.rawScore;
+                            p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0) + parseInt(s.s3_me||0);
+                            p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0) + parseInt(s.s3_opp||0);
+                        }
+                        
+                        const updateGames = (id, wonG, lostG) => {
+                            if(stats[id]) { stats[id].gw += wonG; stats[id].gl += lostG; }
+                        };
+                        
+                        updateGames(p1Id, p1G, p2G);
+                        updateGames(p2Id, p2G, p1G);
+                        if (isIndividual && m.p1.p2) updateGames(m.p1.p2, p1G, p2G);
+                        if (isIndividual && m.p2.p2) updateGames(m.p2.p2, p2G, p1G);
                     }
                 });
             });
 
-            const sortedStats = Object.values(stats).sort((a,b) => b.pts - a.pts || b.w - a.w || a.pld - b.pld);
+            // Kazanma Yüzdelerini Belirle
+            Object.values(stats).forEach(st => {
+                const totalGames = st.gw + st.gl;
+                st.rate = totalGames > 0 ? (st.gw / totalGames) * 100 : 0;
+            });
+            
+            // Sıralama Algoritması: 1. Puan -> 2. Yüzde Oranı -> 3. Aldığı Oyun -> 4. Oynadığı Maç
+            const sortedStats = Object.values(stats).sort((a,b) => b.pts - a.pts || b.rate - a.rate || b.gw - a.gw || a.pld - b.pld);
             
             // Puan Tablosu HTML
             let leagueHTML = `
@@ -3564,24 +3589,30 @@ const getPlayerFullName = (p) => {
                     <div style="overflow-x:auto;">
                         <table style="width:100%; min-width:320px; border-collapse:collapse; font-size:0.85em;">
                             <tr style="background:#f8f9fa; text-align:left; border-bottom:1px solid #ddd;">
-                                <th style="padding:8px 5px;">Sıra</th>
-                                <th style="padding:8px 5px;">${isIndividual ? 'Oyuncu' : 'Takım'}</th>
-                                <th style="padding:8px 5px; text-align:center;">O</th>
-                                <th style="padding:8px 5px; text-align:center;">G</th>
-                                <th style="padding:8px 5px; text-align:center;">M</th>
-                                <th style="padding:8px 5px; text-align:center; color:#d35400;">Puan</th>
+                                <th style="padding:8px 4px;">Sıra</th>
+                                <th style="padding:8px 4px;">${isIndividual ? 'Oyuncu' : 'Takım'}</th>
+                                <th style="padding:8px 4px; text-align:center;">O</th>
+                                <th style="padding:8px 4px; text-align:center;">G</th>
+                                <th style="padding:8px 4px; text-align:center;">M</th>
+                                <th style="padding:8px 4px; text-align:center;">A.O</th>
+                                <th style="padding:8px 4px; text-align:center;">V.O</th>
+                                <th style="padding:8px 4px; text-align:center; color:#28a745;">%</th>
+                                <th style="padding:8px 4px; text-align:center; color:#d35400;">Puan</th>
                             </tr>`;
             
             sortedStats.forEach((st, idx) => {
                 const bg = idx === 0 ? 'background:#fff8e1;' : ''; // Lidere sarı arka plan
                 leagueHTML += `
                     <tr style="border-bottom:1px solid #eee; ${bg}">
-                        <td style="padding:8px 5px; font-weight:bold;">${idx+1}.</td>
-                        <td style="padding:8px 5px; font-weight:600; color:#444;">${st.name}</td>
-                        <td style="padding:8px 5px; text-align:center;">${st.pld}</td>
-                        <td style="padding:8px 5px; text-align:center; color:#28a745;">${st.w}</td>
-                        <td style="padding:8px 5px; text-align:center; color:#dc3545;">${st.l}</td>
-                        <td style="padding:8px 5px; text-align:center; font-weight:bold; color:#d35400;">${st.pts}</td>
+                        <td style="padding:8px 4px; font-weight:bold;">${idx+1}.</td>
+                        <td style="padding:8px 4px; font-weight:600; color:#444;">${st.name}</td>
+                        <td style="padding:8px 4px; text-align:center;">${st.pld}</td>
+                        <td style="padding:8px 4px; text-align:center; color:#28a745;">${st.w}</td>
+                        <td style="padding:8px 4px; text-align:center; color:#dc3545;">${st.l}</td>
+                        <td style="padding:8px 4px; text-align:center;">${st.gw}</td>
+                        <td style="padding:8px 4px; text-align:center;">${st.gl}</td>
+                        <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#28a745;">%${st.rate.toFixed(1)}</td>
+                        <td style="padding:8px 4px; text-align:center; font-weight:bold; color:#d35400;">${st.pts}</td>
                     </tr>`;
             });
             leagueHTML += `</table></div></div>`;
@@ -3607,7 +3638,7 @@ const getPlayerFullName = (p) => {
             leagueHTML += `</div>`;
             
             container.innerHTML = leagueHTML;
-            return; // Eleme ağacı (bracket) koduna girmemesi için fonksiyondan çık
+            return; 
         }
 
         if (tourData.groups && tourData.groups.length > 0) {
