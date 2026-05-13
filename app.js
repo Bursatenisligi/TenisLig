@@ -33,11 +33,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const leagueDurSel = document.getElementById('tour-league-duration');
     const leagueTeamTypeSel = document.getElementById('tour-league-team-type');
     
+// --- YENİ: AKILLI TURNUVA FORMU GİZLE/GÖSTER MOTORU ---
+    const formatSel = document.getElementById('tour-format');
+    const systemSel = document.getElementById('tour-system');
+    const regTypeSel = document.getElementById('tour-reg-type');
+    const leagueDurSel = document.getElementById('tour-league-duration');
+    const leagueTeamTypeSel = document.getElementById('tour-league-team-type');
+    const autoTypeSel = document.getElementById('tour-auto-type');
+    
     function updateTourFormUI() {
         if(!formatSel || !systemSel || !regTypeSel) return;
         const isDoubles = !formatSel.value.includes('Tekler');
         const isAuto = regTypeSel.value === 'auto';
         const isLeague = systemSel.value === 'league';
+        const autoType = autoTypeSel ? autoTypeSel.value : 'balanced';
 
         document.getElementById('doubles-options').style.display = isDoubles ? 'block' : 'none';
         document.getElementById('auto-options').style.display = (isDoubles && isAuto) ? 'block' : 'none';
@@ -51,6 +60,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const showTeamType = isDoubles && isAuto && isCustomWeeks;
             document.getElementById('league-team-type-container').style.display = showTeamType ? 'block' : 'none';
             
+            // KURAL: Eğer Otomatik "Denk Eşleşme" seçildiyse, takımlar her hafta karıştırılamaz!
+            if (showTeamType && leagueTeamTypeSel) {
+                const teamOptions = leagueTeamTypeSel.options;
+                for (let i = 0; i < teamOptions.length; i++) {
+                    if (teamOptions[i].value === 'changing') {
+                        if (isAuto && autoType === 'balanced') {
+                            teamOptions[i].disabled = true;
+                            if (leagueTeamTypeSel.value === 'changing') leagueTeamTypeSel.value = 'fixed'; // Zorla sabite çek
+                            teamOptions[i].text = "Her Hafta Karıştırılsın (Denk eşleşmede kapalı)";
+                        } else {
+                            teamOptions[i].disabled = false;
+                            teamOptions[i].text = "Takımlar Her Hafta Yeniden Karıştırılsın (Mix-in)";
+                        }
+                    }
+                }
+            }
+            
             const teamType = showTeamType ? leagueTeamTypeSel.value : 'fixed';
             
             // Puan tablosu: Çiftlerse ve takımlar sabitse sor. Her hafta değişiyorsa sorma, direkt kişi bazlı yap.
@@ -58,6 +84,14 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('league-standings-container').style.display = showStandings ? 'block' : 'none';
         }
     }
+
+    if (formatSel) formatSel.addEventListener('change', updateTourFormUI);
+    if (systemSel) systemSel.addEventListener('change', updateTourFormUI);
+    if (regTypeSel) regTypeSel.addEventListener('change', updateTourFormUI);
+    if (leagueDurSel) leagueDurSel.addEventListener('change', updateTourFormUI);
+    if (leagueTeamTypeSel) leagueTeamTypeSel.addEventListener('change', updateTourFormUI);
+    if (autoTypeSel) autoTypeSel.addEventListener('change', updateTourFormUI);
+    setTimeout(updateTourFormUI, 500);
 
     if (formatSel) formatSel.addEventListener('change', updateTourFormUI);
     if (systemSel) systemSel.addEventListener('change', updateTourFormUI);
