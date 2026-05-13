@@ -2815,8 +2815,9 @@ if (tourData.status === 'Kayıt') {
                 let displayHTML = '';
                 
                 // TAKIMLAR KURULDUYSA ÖZEL GÖRÜNÜM
+// TAKIMLAR KURULDUYSA ÖZEL GÖRÜNÜM
                 if (isAutoTeams) {
-                    const teamPoints = (u1?.toplamPuan || 0) + (u2?.toplamPuan || 0);
+                    const teamMetric = p.points !== undefined ? `%${p.points} Güç` : 'Belirsiz';
                     displayHTML = `
                         <div style="flex:1;">
                             <div style="font-size:0.95em; font-weight:700; color:#333; margin-bottom:3px;">Takım ${index + 1}</div>
@@ -2824,7 +2825,7 @@ if (tourData.status === 'Kayıt') {
                             <div style="font-size:0.85em; color:#555;">🎾 ${p2Name}</div>
                         </div>
                         <div style="text-align:right;">
-                            <span style="background:#e3f2fd; color:#0d47a1; padding:4px 8px; border-radius:12px; font-size:0.8em; font-weight:bold;">${teamPoints} Puan</span>
+                            <span style="background:#e3f2fd; color:#0d47a1; padding:4px 8px; border-radius:12px; font-size:0.8em; font-weight:bold;">${teamMetric}</span>
                         </div>
                     `;
                 } 
@@ -3791,51 +3792,119 @@ const getPlayerFullName = (p) => {
         }
     };
 // --- YENİ: OTOMATİK DENK/KURA TAKIM KURMA ALGORİTMASI ---
+// --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
+// --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
     window.generateAutoTeams = async function(tourId) {
         try {
             const docRef = db.collection('tournaments').doc(tourId);
             const data = (await docRef.get()).data();
             let players = data.participants || [];
             
+            // 1. GERÇEK GÜCÜ BUL (Tüm maçlardan Oyun Kazanma Yüzdesini Hesapla)
+            const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+            let gameStats = {}; 
+            matchesSnap.forEach(doc => {
+                const m = doc.data();
+                if(!m.skor || !m.kayitliKazananID) return;
+                
+                const wid = m.kayitliKazananID;
+                const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+                let wP = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+                let lP = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
+
+                const uids = [wid, lid]; if(wP) uids.push(wP); if(lP) uids.push(lP);
+                uids.forEach(u => { if(u && !gameStats[u]) gameStats[u] = { w: 0, p: 0 }; });
+
+                const s = m.skor;
+                const sets = [{ w: s.s1_me, l: s.s1_opp, tb: false }, { w: s.s2_me, l: s.s2_opp, tb: false }, { w: s.s3_me, l: s.s3_opp, tb: true }];
+                
+                let isEntryByWinner = m.sonucuGirenID === wid;
+                if (m.macTipi === 'Turnuva') isEntryByWinner = (m.oyuncu1ID === wid);
+                
+                sets.forEach(set => { 
+                    if (set.tb) return; // Tie-Break oyundan sayılmaz
+                    let b1 = parseInt(set.w || 0); let b2 = parseInt(set.l || 0); 
+                    if(b1 + b2 > 0) { 
+                        let winG = isEntryByWinner ? b1 : b2; let losG = isEntryByWinner ? b2 : b1;
+                        if(wid) { gameStats[wid].w += winG; gameStats[wid].p += (winG + losG); }
+                        if(wP) { gameStats[wP].w += winG; gameStats[wP].p += (winG + losG); }
+                        if(lid) { gameStats[lid].w += losG; gameStats[lid].p += (winG + losG); }
+                        if(lP) { gameStats[lP].w += losG; gameStats[lP].p += (winG + losG); }
+                    } 
+                });
+            });
+
+            // 2. TAKIMLARI KUR
             if (data.format === 'Mix') {
                 let males = []; let females = [];
-                players.forEach(p => {
+                for (let p of players) {
                     const u = userMap[p.p1];
-                    if(u.cinsiyet === 'Kadın') females.push({uid: p.p1, pts: u.toplamPuan});
-                    else males.push({uid: p.p1, pts: u.toplamPuan});
-                });
+                    let rate = 0;
+                    
+                    // SİHİRLİ DOKUNUŞ: EĞER OYUNCUNUN HİÇ MAÇI YOKSA ORGANİZATÖRE SOR!
+                    if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
+                        if (data.autoType === 'balanced') {
+                            let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
+                            rate = parseFloat(val);
+                            if(isNaN(rate)) rate = 0;
+                        }
+                    } else {
+                        rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
+                    }
+                    
+                    if(u.cinsiyet === 'Kadın') females.push({uid: p.p1, rate: rate});
+                    else males.push({uid: p.p1, rate: rate});
+                }
                 
-                if (males.length !== females.length) return alert(`🚨 Mix turnuvası için Kadın ve Erkek sayıları EŞİT olmalıdır! \nMevcut Kayıt: ${males.length} Erkek, ${females.length} Kadın. Lütfen eksik oyuncuları kayıt edin veya fazla olanları çıkarın.`);
+                if (males.length !== females.length) return alert(`🚨 Mix turnuvası için Kadın ve Erkek sayıları EŞİT olmalıdır! \nMevcut Kayıt: ${males.length} Erkek, ${females.length} Kadın.`);
                 
                 if (data.autoType === 'balanced') {
-                    males.sort((a,b) => b.pts - a.pts); // Erkekleri Büyükten Küçüğe
-                    females.sort((a,b) => a.pts - b.pts); // Kadınları Küçükten Büyüğe (Dengelemek için)
+                    males.sort((a,b) => b.rate - a.rate); // Erkekler Büyükten Küçüğe
+                    females.sort((a,b) => a.rate - b.rate); // Kadınlar Küçükten Büyüğe
                 } else {
-                    males.sort(() => 0.5 - Math.random());
-                    females.sort(() => 0.5 - Math.random());
+                    males.sort(() => 0.5 - Math.random()); females.sort(() => 0.5 - Math.random());
                 }
                 
                 let newTeams = [];
                 for(let i=0; i<males.length; i++) {
-                    newTeams.push({ p1: males[i].uid, p2: females[i].uid, points: 0 });
+                    const avgRate = ((males[i].rate + females[i].rate) / 2).toFixed(1);
+                    newTeams.push({ p1: males[i].uid, p2: females[i].uid, points: avgRate }); 
                 }
                 await docRef.update({ participants: newTeams, teamsGenerated: true });
-                alert("Müthiş! Mix takımları puan dengesi gözetilerek (En iyi erkek + En zayıf kadın) başarıyla eşleştirildi! ✅ Artık fikstürü çekebilirsiniz.");
+                alert("Müthiş! Mix takımları OYUN KAZANMA YÜZDELERİ gözetilerek dengeli bir şekilde kuruldu! ✅");
                 openTournamentDetail(tourId, (await docRef.get()).data());
                 
             } else { // Double Erkek veya Double Kadın
                 if (players.length % 2 !== 0) return alert(`🚨 Eşleşme için toplam oyuncu sayısı ÇİFT olmalıdır! (Mevcut: ${players.length})`);
                 
-                let all = players.map(p => ({uid: p.p1, pts: userMap[p.p1].toplamPuan}));
-                if (data.autoType === 'balanced') { all.sort((a,b) => b.pts - a.pts); } 
+                let all = [];
+                for (let p of players) {
+                    const u = userMap[p.p1];
+                    let rate = 0;
+                    
+                    // SİHİRLİ DOKUNUŞ: EĞER OYUNCUNUN HİÇ MAÇI YOKSA ORGANİZATÖRE SOR!
+                    if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
+                        if (data.autoType === 'balanced') {
+                            let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
+                            rate = parseFloat(val);
+                            if(isNaN(rate)) rate = 0;
+                        }
+                    } else {
+                        rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
+                    }
+                    all.push({uid: p.p1, rate: rate});
+                }
+
+                if (data.autoType === 'balanced') { all.sort((a,b) => b.rate - a.rate); } 
                 else { all.sort(() => 0.5 - Math.random()); }
                 
                 let newTeams = [];
                 for(let i=0; i<all.length/2; i++) {
-                    newTeams.push({ p1: all[i].uid, p2: all[all.length - 1 - i].uid, points: 0 }); // Yılan mantığı (1. ile Sonuncu)
+                    const avgRate = ((all[i].rate + all[all.length - 1 - i].rate) / 2).toFixed(1);
+                    newTeams.push({ p1: all[i].uid, p2: all[all.length - 1 - i].uid, points: avgRate });
                 }
                 await docRef.update({ participants: newTeams, teamsGenerated: true });
-                alert("Takımlar başarıyla kuruldu! ✅");
+                alert("Takımlar OYUN KAZANMA YÜZDELERİNE göre başarıyla kuruldu! ✅");
                 openTournamentDetail(tourId, (await docRef.get()).data());
             }
         } catch(e) { alert("Takım kurma hatası: " + e.message); }
