@@ -742,11 +742,11 @@ async function loadAnnouncements() {
                 
                 // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
                 let team1Name = p1Name.split(' ')[0];
-                if (m.macFormati !== 'Tekler' && m.oyuncu1PartnerID && userMap[m.oyuncu1PartnerID]) {
+                if (!(m.macFormati || '').includes('Tekler') && m.oyuncu1PartnerID && userMap[m.oyuncu1PartnerID]) {
                     team1Name += ` & ${userMap[m.oyuncu1PartnerID].isim.split(' ')[0]}`;
                 }
                 let team2Name = p2Name.split(' ')[0];
-                if (m.macFormati !== 'Tekler' && m.oyuncu2PartnerID && userMap[m.oyuncu2PartnerID]) {
+                if (!(m.macFormati || '').includes('Tekler') && m.oyuncu2PartnerID && userMap[m.oyuncu2PartnerID]) {
                     team2Name += ` & ${userMap[m.oyuncu2PartnerID].isim.split(' ')[0]}`;
                 }
                 // ------------------------------------
@@ -822,11 +822,11 @@ function loadScheduledMatches() {
                 
                 // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
                 let team1Name = p1Name.split(' ')[0];
-                if (match.macFormati !== 'Tekler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
+                if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
                     team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
                 }
                 let team2Name = p2Name.split(' ')[0];
-                if (match.macFormati !== 'Tekler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
+                if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
                     team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
                 }
                 // ------------------------------------
@@ -1214,11 +1214,11 @@ function showMatchDetail(matchDocId) {
             
             // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA ---
             let team1Name = p1Name.split(' ')[0]; 
-            if (match.macFormati !== 'Tekler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
+            if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
                 team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
             }
             let team2Name = p2Name.split(' ')[0];
-            if (match.macFormati !== 'Tekler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
+            if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
                 team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
             }
             // ---------------------------------------------
@@ -1226,7 +1226,7 @@ function showMatchDetail(matchDocId) {
             winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
             if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
             
-            let infoHTML = `<h3>${match.macTipi} ${match.macFormati !== 'Tekler' ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
+            let infoHTML = `<h3>${match.macTipi} ${!(match.macFormati || '').includes('Tekler') ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
             if(match.durum === 'Acik_Ilan') infoHTML += `<p style="color:orange; font-weight:bold;">Bu bir açık ilandır.</p>`;
             
             const courtType = match.kortTipi ? ` (${match.kortTipi})` : '';
@@ -1276,7 +1276,7 @@ function showMatchDetail(matchDocId) {
 
             if (match.durum === 'Bekliyor') {
                 if (currentUserID === match.oyuncu2ID) {
-                    if (match.macFormati !== 'Tekler') {
+                    if (!(match.macFormati || '').includes('Tekler')) {
                         const label = document.createElement('label'); label.textContent = "Takım Arkadaşın (Partnerin):"; label.className = "input-label"; label.style.marginTop = "0";
                         const s = document.createElement('select'); s.id = 'accept-challenge-partner'; s.style.marginBottom = '15px'; s.innerHTML = '<option value="">Partnerini Seç</option>';
                         Object.values(userMap).forEach(p => { if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) { s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; } });
@@ -1285,7 +1285,7 @@ function showMatchDetail(matchDocId) {
                     const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
                     ab.onclick = async () => {
                         let partnerID = null;
-                        if (match.macFormati !== 'Tekler') {
+                        if (!(match.macFormati || '').includes('Tekler')) {
                             const pSelect = document.getElementById('accept-challenge-partner');
                             if (!pSelect.value) return alert("Lütfen partnerini seç!"); partnerID = pSelect.value;
                         }
@@ -2695,7 +2695,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                     const reverseStats = (uid, pts, isWin) => {
                         if (!uid) return;
                         const userRef = db.collection('users').doc(uid);
-                        if (m.macFormati !== 'Tekler') {
+                        if (!(m.macFormati || '').includes('Tekler')) {
                             batch.update(userRef, { ciftlerPuani: firebase.firestore.FieldValue.increment(pts) });
                         } else {
                             batch.update(userRef, { 
@@ -2708,7 +2708,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
 
                     reverseStats(wid, pointsToSubtractW, true);
                     reverseStats(lid, pointsToSubtractL, false);
-                    if (m.macFormati !== 'Tekler') {
+                    if (!(m.macFormati || '').includes('Tekler')) {
                         reverseStats(wPartnerId, pointsToSubtractW, true);
                         reverseStats(lPartnerId, pointsToSubtractL, false);
                     }
@@ -3142,7 +3142,7 @@ window.adminAddParticipant = async function(tourId) {
         const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
         let wPartnerId = null; let lPartnerId = null;
-        if (m.macFormati !== 'Tekler') {
+        if (!(m.macFormati || '').includes('Tekler')) {
             wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
             lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
         }
@@ -3174,7 +3174,7 @@ window.adminAddParticipant = async function(tourId) {
             const pts = isWin ? winPoints : losePoints;
             const gInc = isWin ? 1 : 0;
             
-            if (m.macFormati !== 'Tekler') {
+            if (!(m.macFormati || '').includes('Tekler')) {
                 const uData = userMap[uid] || {};
                 const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
                 batch.update(ref, { 
@@ -3192,7 +3192,7 @@ window.adminAddParticipant = async function(tourId) {
         };
 
         updateStats(wid, true); updateStats(lid, false);
-        if (m.macFormati !== 'Tekler') { updateStats(wPartnerId, true); updateStats(lPartnerId, false); }
+        if (!(m.macFormati || '').includes('Tekler')) { updateStats(wPartnerId, true); updateStats(lPartnerId, false); }
 
         const matchRef = db.collection('matches').doc(id);
         batch.update(matchRef, { durum: 'Tamamlandı', kayitliKazananID: wid });
@@ -3228,7 +3228,7 @@ window.adminAddParticipant = async function(tourId) {
         const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
         let wPartnerId = null; let lPartnerId = null;
-        if (m.macFormati !== 'Tekler') {
+        if (!(m.macFormati || '').includes('Tekler')) {
             wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
             lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
         }
@@ -3253,7 +3253,7 @@ window.adminAddParticipant = async function(tourId) {
             const pts = isWin ? winPoints : losePoints;
             const gInc = isWin ? 1 : 0;
             
-            if (m.macFormati !== 'Tekler') {
+            if (!(m.macFormati || '').includes('Tekler')) {
                 const uData = userMap[uid] || {};
                 const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
                 batch.update(ref, { 
@@ -3272,7 +3272,7 @@ window.adminAddParticipant = async function(tourId) {
 
         updateStats(wid, true); 
         updateStats(lid, false);
-        if (m.macFormati !== 'Tekler') { 
+        if (!(m.macFormati || '').includes('Tekler')) { 
             updateStats(wPartnerId, true); 
             updateStats(lPartnerId, false); 
         }
@@ -3626,7 +3626,7 @@ const getPlayerFullName = (p) => {
 
                 // Partnerleri de yakala
                 let wPartnerId = null; let lPartnerId = null;
-                if (m.macFormati !== 'Tekler') {
+                if (!(m.macFormati || '').includes('Tekler')) {
                     wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
                     lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
                 }
@@ -3659,7 +3659,7 @@ const getPlayerFullName = (p) => {
                     userStats[uid].macSayisi += 1;
                     if(isWin) userStats[uid].galibiyetSayisi += 1;
 
-                    if (m.macFormati !== 'Tekler') {
+                    if (!(m.macFormati || '').includes('Tekler')) {
                         userStats[uid].ciftlerPuani += isWin ? winPoints : losePoints;
                     } else {
                         userStats[uid].toplamPuan += isWin ? winPoints : losePoints;
@@ -3669,7 +3669,7 @@ const getPlayerFullName = (p) => {
                 // Puanları Dağıt
                 applyToUser(wid, true);
                 applyToUser(lid, false);
-                if (m.macFormati !== 'Tekler') {
+                if (!(m.macFormati || '').includes('Tekler')) {
                     applyToUser(wPartnerId, true);
                     applyToUser(lPartnerId, false);
                 }
