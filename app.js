@@ -4064,7 +4064,7 @@ const getPlayerFullName = (p) => {
         } catch(e) { alert("Takım kurma hatası: " + e.message); }
     };
 
-    // --- YENİ: LİG FİKSTÜRÜ VE HAFTALIK KARIŞIK SİSTEM MOTORU ---
+// --- YENİ: LİG FİKSTÜRÜ VE HAFTALIK KARIŞIK SİSTEM MOTORU ---
     window.generateLeagueFixture = async function(tourId) {
         if (!confirm("Lig fikstürü oluşturulacak ve maçlar başlayacak. Onaylıyor musunuz?")) return;
         try {
@@ -4079,26 +4079,43 @@ const getPlayerFullName = (p) => {
 
             if (isAuto) {
                 // SİSTEM 1: HAFTALIK YENİDEN KARIŞTIRILAN (MIX-IN) LİG
+                
+                // HATA BURADAYDI: Takımlara dönüşen listeyi tekrar bireylere ayırıyoruz (Flatten)
+                let individuals = [];
+                players.forEach(team => {
+                    if (team.p1) individuals.push({ p1: team.p1 });
+                    if (team.p2) individuals.push({ p1: team.p2 });
+                });
+
                 for(let w = 0; w < weeks; w++) {
                     let roundMatches = [];
-                    // Her hafta oyuncuları rastgele karıştır
-                    let shuffled = [...players].sort(() => 0.5 - Math.random());
+                    // Her hafta tüm oyuncuları rastgele karıştır
+                    let shuffled = [...individuals].sort(() => 0.5 - Math.random());
                     
                     if (tourData.format === 'Mix') {
                         let males = shuffled.filter(p => userMap[p.p1].cinsiyet !== 'Kadın');
                         let females = shuffled.filter(p => userMap[p.p1].cinsiyet === 'Kadın');
                         let teams = [];
-                        for(let i=0; i<Math.min(males.length, females.length); i++) teams.push({p1: males[i].p1, p2: females[i].p1});
+                        
+                        for(let i=0; i<Math.min(males.length, females.length); i++) {
+                            teams.push({p1: males[i].p1, p2: females[i].p1});
+                        }
                         for(let i=0; i<teams.length; i+=2) {
-                            if(i+1 < teams.length) roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
+                            if(i+1 < teams.length) {
+                                roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
+                            }
                         }
                     } else { // Double Erkek / Kadın
                         let teams = [];
                         for(let i=0; i<shuffled.length; i+=2) {
-                            if(i+1 < shuffled.length) teams.push({p1: shuffled[i].p1, p2: shuffled[i+1].p1});
+                            if(i+1 < shuffled.length) {
+                                teams.push({p1: shuffled[i].p1, p2: shuffled[i+1].p1});
+                            }
                         }
                         for(let i=0; i<teams.length; i+=2) {
-                            if(i+1 < teams.length) roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
+                            if(i+1 < teams.length) {
+                                roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
+                            }
                         }
                     }
                     rounds.push({ roundName: (w+1) + ". Hafta", matches: roundMatches });
