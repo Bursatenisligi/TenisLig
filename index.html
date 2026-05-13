@@ -260,21 +260,35 @@
             </div>
         </div>
 
-        <label class="input-label">Turnuva İlerleyiş Sistemi</label>
+<label class="input-label">Turnuva İlerleyiş Sistemi</label>
         <select id="tour-system">
             <option value="group_knockout">Grup Aşaması + Eleme</option>
             <option value="knockout">Direkt Eleme (Kupa)</option>
-            <option value="league">Lig Usulü (Herkes Herkesle Oynar)</option>
+            <option value="league">Lig Usulü (Puan Tablolu)</option>
         </select>
 
-        <div id="league-options" style="display:none; background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #bbdefb;">
-            <div id="league-weeks-container" style="display:none;">
-                <label class="input-label" style="margin-top:0; color:#0d47a1;">Lig Kaç Hafta Sürecek?</label>
-                <input type="number" id="tour-league-weeks" value="4" min="1" style="margin-bottom:5px;">
-                <small style="color:#666; font-size:0.8em; display:block;">Takımlar her hafta baştan dağıtılır.</small>
+        <div id="league-options" style="display:none; background:#e3f2fd; padding:15px; border-radius:8px; margin-bottom:10px; border:1px solid #bbdefb;">
+            <label class="input-label" style="margin-top:0; color:#0d47a1;">Lig Formatı</label>
+            <select id="tour-league-duration">
+                <option value="all_play_all">Herkes Birbiriyle Oynasın (Tam Lig)</option>
+                <option value="custom_weeks">Belirli Bir Hafta Sayısı Oynansın</option>
+            </select>
+
+            <div id="league-custom-weeks-container" style="display:none; margin-top:10px;">
+                <label class="input-label" style="margin-top:0; color:#0d47a1;">Kaç Hafta Sürecek?</label>
+                <input type="number" id="tour-league-weeks" value="4" min="1">
             </div>
+
+            <div id="league-team-type-container" style="display:none; margin-top:10px;">
+                <label class="input-label" style="margin-top:0; color:#0d47a1;">Takım Yapısı</label>
+                <select id="tour-league-team-type">
+                    <option value="fixed">Takımlar Bir Kere Kurulsun ve Sabit Kalsın</option>
+                    <option value="changing">Takımlar Her Hafta Yeniden Karıştırılsın (Mix-in)</option>
+                </select>
+            </div>
+
             <div id="league-standings-container" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0; color:#0d47a1;">Lig Puan Tablosu Türü</label>
+                <label class="input-label" style="margin-top:0; color:#0d47a1;">Puan Tablosu Türü</label>
                 <select id="tour-standings-type">
                     <option value="team">Takım Bazlı Sıralama</option>
                     <option value="individual">Kişi Bazlı Sıralama</option>
@@ -898,7 +912,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=82"></script>
+    <script src="app.js?=83"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {

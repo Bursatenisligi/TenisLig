@@ -25,10 +25,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const challengeMatchFormat = document.getElementById('challenge-match-format');
     const challengePartnerContainer = document.getElementById('challenge-partner-container');
     const challengePartnerSelect = document.getElementById('challenge-partner-select');
+    
 // --- YENİ: AKILLI TURNUVA FORMU GİZLE/GÖSTER MOTORU ---
     const formatSel = document.getElementById('tour-format');
     const systemSel = document.getElementById('tour-system');
     const regTypeSel = document.getElementById('tour-reg-type');
+    const leagueDurSel = document.getElementById('tour-league-duration');
+    const leagueTeamTypeSel = document.getElementById('tour-league-team-type');
     
     function updateTourFormUI() {
         if(!formatSel || !systemSel || !regTypeSel) return;
@@ -40,14 +43,28 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('auto-options').style.display = (isDoubles && isAuto) ? 'block' : 'none';
         document.getElementById('league-options').style.display = isLeague ? 'block' : 'none';
         
-        document.getElementById('league-weeks-container').style.display = (isLeague && isDoubles && isAuto) ? 'block' : 'none';
-        document.getElementById('league-standings-container').style.display = (isLeague && isDoubles && !isAuto) ? 'block' : 'none';
+        if (isLeague) {
+            const isCustomWeeks = leagueDurSel && leagueDurSel.value === 'custom_weeks';
+            document.getElementById('league-custom-weeks-container').style.display = isCustomWeeks ? 'block' : 'none';
+            
+            // Eğer çiftler ve otomatik eşleşme ise (sadece Belirli Hafta seçiliyse) Takım Yapısını sor
+            const showTeamType = isDoubles && isAuto && isCustomWeeks;
+            document.getElementById('league-team-type-container').style.display = showTeamType ? 'block' : 'none';
+            
+            const teamType = showTeamType ? leagueTeamTypeSel.value : 'fixed';
+            
+            // Puan tablosu: Çiftlerse ve takımlar sabitse sor. Her hafta değişiyorsa sorma, direkt kişi bazlı yap.
+            const showStandings = isDoubles && teamType === 'fixed';
+            document.getElementById('league-standings-container').style.display = showStandings ? 'block' : 'none';
+        }
     }
 
     if (formatSel) formatSel.addEventListener('change', updateTourFormUI);
     if (systemSel) systemSel.addEventListener('change', updateTourFormUI);
     if (regTypeSel) regTypeSel.addEventListener('change', updateTourFormUI);
-    setTimeout(updateTourFormUI, 500); // İlk açılışta tetikle
+    if (leagueDurSel) leagueDurSel.addEventListener('change', updateTourFormUI);
+    if (leagueTeamTypeSel) leagueTeamTypeSel.addEventListener('change', updateTourFormUI);
+    setTimeout(updateTourFormUI, 500);
     
     // --- KORT LİSTESİ ---
     const COURT_LIST = [
@@ -1978,14 +1995,25 @@ function showNotification(msg, type='info') {
             const pointsSystem = document.getElementById('tour-points-system') ? document.getElementById('tour-points-system').value : 'winRate';
             const fee = parseInt(document.getElementById('tour-fee').value) || 0;
             const deadline = document.getElementById('tour-deadline').value;
-            // YENİ KAYIT ALANLARI
+  // YENİ KAYIT ALANLARI VE LİG YAPISI
             const isDoubles = !format.includes('Tekler');
             const regType = isDoubles ? document.getElementById('tour-reg-type').value : 'manual';
             const autoType = (isDoubles && regType === 'auto') ? document.getElementById('tour-auto-type').value : null;
             const systemType = document.getElementById('tour-system').value;
-            const leagueWeeks = (systemType === 'league' && isDoubles && regType === 'auto') ? parseInt(document.getElementById('tour-league-weeks').value) : null;
+            
+            const leagueDuration = systemType === 'league' ? document.getElementById('tour-league-duration').value : null;
+            const leagueWeeks = (systemType === 'league' && leagueDuration === 'custom_weeks') ? parseInt(document.getElementById('tour-league-weeks').value) : null;
+            
+            let leagueTeamType = 'fixed';
+            if (systemType === 'league' && isDoubles && regType === 'auto' && leagueDuration === 'custom_weeks') {
+                leagueTeamType = document.getElementById('tour-league-team-type').value;
+            }
+            
             let standingsType = 'individual';
-            if (systemType === 'league' && isDoubles && regType === 'manual') standingsType = document.getElementById('tour-standings-type').value;
+            if (systemType === 'league' && isDoubles) {
+                if (leagueTeamType === 'changing') standingsType = 'individual';
+                else standingsType = document.getElementById('tour-standings-type').value;
+            }
 
             if(!name || !deadline) return alert("Lütfen turnuva adını ve son kayıt tarihini girin.");
 
@@ -2005,7 +2033,9 @@ function showNotification(msg, type='info') {
                     regType: regType,
                     autoType: autoType,
                     systemType: systemType,
+                    leagueDuration: leagueDuration,
                     leagueWeeks: leagueWeeks,
+                    leagueTeamType: leagueTeamType,
                     standingsType: standingsType,
                     teamsGenerated: false,
                     participants: [] 
@@ -2619,13 +2649,14 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
 if (tourData.status === 'Kayıt') {
                 actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
             } else if (tourData.status === 'Format_Secimi') {
-                let generationButtons = '';
-                
-                // 1. ADIM: EĞER OTOMATİK TAKIMSA ÖNCE TAKIMLARI KUR BUTONU
-                if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated) {
+  let generationButtons = '';
+                const isChangingLeague = (tourData.systemType === 'league' && tourData.leagueTeamType === 'changing');
+
+                // 1. ADIM: EĞER OTOMATİK SABİT TAKIMSA ÖNCE TAKIMLARI KUR BUTONU ÇIKAR
+                if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated && !isChangingLeague) {
                      generationButtons = `<button onclick="window.generateAutoTeams('${tourId}')" class="btn-main" style="background:#17a2b8; padding:10px; width:100%;">🤖 Sistem Takımlarını Kur (${tourData.autoType === 'balanced' ? 'Denk' : 'Kura'})</button>`;
                 } 
-                // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE) SİSTEMİ BAŞLAT BUTONLARI
+                // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE / DEĞİŞEN LİG İSE) SİSTEMİ BAŞLAT BUTONLARI ÇIKAR
                 else {
                      if (tourData.systemType === 'league') {
                          generationButtons = `<button onclick="window.generateLeagueFixture('${tourId}')" class="btn-main" style="background:#20c997; padding:10px; width:100%;">📅 Lig Fikstürünü Çıkar ve Başlat</button>`;
@@ -3523,7 +3554,7 @@ const getPlayerFullName = (p) => {
         };
  // YENİ: LİG SİSTEMİ TABLOSU VE FİKSTÜRÜ ÇİZİMİ
         if (tourData.systemType === 'league' && tourData.bracket) {
-            const isIndividual = (tourData.standingsType === 'individual' || tourData.regType === 'auto');
+            const isIndividual = ((tourData.format || '').includes('Tekler') || tourData.standingsType === 'individual' || tourData.leagueTeamType === 'changing');
             let stats = {};
             
             // İstatistik Havuzunu Kur
@@ -4064,7 +4095,160 @@ const getPlayerFullName = (p) => {
         } catch(e) { alert("Takım kurma hatası: " + e.message); }
     };
 
-// --- YENİ: LİG FİKSTÜRÜ VE HAFTALIK KARIŞIK SİSTEM MOTORU ---
+/// --- 2. KATILIMCI LİSTESİ VE KAYIT ALANI ---
+    async function renderRegistrationArea(tourId, tourData, myUid) {
+        const regArea = document.getElementById('tour-registration-area');
+        if (!regArea) return;
+
+        // Yükleniyor efekti ekleyelim (hesaplama 1-2 saniye sürebilir)
+        regArea.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Oyuncu güç oranları analiz ediliyor... ⏳</div>';
+
+        const participants = tourData.participants || [];
+        const isAdmin = (tourData.creatorId === myUid);
+        const isAutoTeams = tourData.regType === 'auto' && tourData.teamsGenerated;
+
+        // --- YENİ: GERÇEK OYUN (GAME) KAZANMA YÜZDESİNİ HESAPLA ---
+        const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+        let gameStats = {}; 
+        matchesSnap.forEach(doc => {
+            const m = doc.data();
+            if(!m.skor || !m.kayitliKazananID) return;
+            
+            const wid = m.kayitliKazananID;
+            const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+            let wP = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+            let lP = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
+
+            const uids = [wid, lid]; if(wP) uids.push(wP); if(lP) uids.push(lP);
+            uids.forEach(u => { if(u && !gameStats[u]) gameStats[u] = { w: 0, p: 0 }; });
+
+            const s = m.skor;
+            const sets = [{ w: s.s1_me, l: s.s1_opp, tb: false }, { w: s.s2_me, l: s.s2_opp, tb: false }, { w: s.s3_me, l: s.s3_opp, tb: true }];
+            
+            let isEntryByWinner = m.sonucuGirenID === wid;
+            if (m.macTipi === 'Turnuva') isEntryByWinner = (m.oyuncu1ID === wid);
+            
+            sets.forEach(set => { 
+                if (set.tb) return; // Tie-break dahil edilmez
+                let b1 = parseInt(set.w || 0); let b2 = parseInt(set.l || 0); 
+                if(b1 + b2 > 0) { 
+                    let winG = isEntryByWinner ? b1 : b2; let losG = isEntryByWinner ? b2 : b1;
+                    if(wid) { gameStats[wid].w += winG; gameStats[wid].p += (winG + losG); }
+                    if(wP) { gameStats[wP].w += winG; gameStats[wP].p += (winG + losG); }
+                    if(lid) { gameStats[lid].w += losG; gameStats[lid].p += (winG + losG); }
+                    if(lP) { gameStats[lP].w += losG; gameStats[lP].p += (winG + losG); }
+                } 
+            });
+        });
+        
+        const getGameWinRate = (uid) => { 
+            if(!uid || !gameStats[uid] || gameStats[uid].p === 0) return 0; 
+            return Math.round((gameStats[uid].w / gameStats[uid].p) * 100); 
+        };
+        // ---------------------------------------------------------
+        
+        let html = `
+            <div style="text-align:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                <p style="margin:5px 0;"><strong>Format:</strong> ${tourData.format} | <strong>Ücret:</strong> ${tourData.fee} Puan</p>
+            </div>
+            <h4 style="margin-top:0; border:none; font-size:1.1em; color:#0d47a1;">
+                ${isAutoTeams ? '🤝 Sistem Tarafından Kurulan Takımlar' : '👥 Katılımcı Listesi'} (${participants.length})
+            </h4>
+        `;
+
+        if (participants.length === 0) {
+            html += `<p style="text-align:center; color:#999; font-size:0.9em; padding:10px;">Henüz kayıtlı oyuncu yok.</p>`;
+        } else {
+            html += `<div class="tour-participants-list" style="margin-bottom:20px; max-height:350px; overflow-y:auto; padding-right:5px;">`;
+            
+            participants.forEach((p, index) => {
+                const u1 = userMap[p.p1];
+                const u2 = p.p2 ? userMap[p.p2] : null;
+                const p1Name = u1?.isim || 'Bilinmeyen';
+                const p2Name = u2 ? u2.isim : '';
+                
+                let displayHTML = '';
+                
+                // TAKIMLAR KURULDUYSA ÖZEL GÖRÜNÜM
+                if (isAutoTeams) {
+                    const teamMetric = p.points !== undefined ? `%${p.points} Güç` : 'Belirsiz';
+                    displayHTML = `
+                        <div style="flex:1;">
+                            <div style="font-size:0.95em; font-weight:700; color:#333; margin-bottom:3px;">Takım ${index + 1}</div>
+                            <div style="font-size:0.85em; color:#555;">🎾 ${p1Name}</div>
+                            <div style="font-size:0.85em; color:#555;">🎾 ${p2Name}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="background:#e3f2fd; color:#0d47a1; padding:4px 8px; border-radius:12px; font-size:0.8em; font-weight:bold;">${teamMetric}</span>
+                        </div>
+                    `;
+                } 
+                // NORMAL/BİREYSEL KAYIT GÖRÜNÜMÜ
+                else {
+                    const displayName = p.p2 ? `${p1Name} & ${p2Name}` : p1Name;
+                    
+                    const r1 = getGameWinRate(p.p1);
+                    let rateText = "";
+                    if (p.p2) {
+                        const r2 = getGameWinRate(p.p2);
+                        rateText = `%${Math.round((r1 + r2) / 2)} Ort. Güç`;
+                    } else {
+                        rateText = `%${r1} Güç`;
+                    }
+
+                    displayHTML = `
+                        <div style="flex:1; font-size:0.9em; font-weight:600; color:#444;">${index + 1}. ${displayName}</div>
+                        <div style="font-size:0.85em; font-weight:bold; color:#0d47a1; background:#e3f2fd; padding:3px 8px; border-radius:10px;">${rateText}</div>
+                    `;
+                }
+
+                html += `
+                    <div class="modern-list-item" style="padding:12px; margin-bottom:8px; border-left:4px solid ${isAutoTeams ? '#28a745' : '#c06035'}; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+                        ${displayHTML}
+                        ${isAdmin && !isAutoTeams ? `<button onclick="adminDeleteParticipant('${tourId}', ${index})" style="width:auto; background:none; color:#dc3545; margin:0 0 0 10px; padding:5px; box-shadow:none; font-size:1.2em;">🗑️</button>` : ''}
+                    </div>`;
+            });
+            html += `</div>`;
+        }
+
+        const myRegistration = participants.find(p => p.p1 === myUid || p.p2 === myUid);
+
+        if (tourData.status !== 'Kayıt') {
+            html += `<div style="background:#fff3cd; padding:10px; border-radius:8px; text-align:center; color:#856404; font-weight:bold;">🔒 Kayıtlar Kapandı</div>`;
+        } else if (myRegistration) {
+            html += `
+                <div style="background:#e8f5e9; padding:15px; border-radius:12px; text-align:center; border:1px solid #c3e6cb;">
+                    <p style="color:#28a745; font-weight:bold; margin-bottom:10px;">✅ Turnuvaya Kayıtlısınız</p>
+                    <button onclick="cancelTournamentRegistration('${tourId}', '${myRegistration.p1}', '${myRegistration.p2}')" class="btn-main" style="background:#dc3545; width:auto; padding:8px 20px;">Kaydı İptal Et ❌</button>
+                </div>`;
+        } else {
+            let partnerSelectHTML = '';
+            if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
+                partnerSelectHTML = `<label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label><select id="tour-partner-select" style="margin-bottom:15px;"><option value="">Lütfen Bir Partner Seçin</option></select>`;
+            }
+            html += `<div style="background:#f8f9fa; padding:15px; border-radius:12px; border:1px solid #eee;">${partnerSelectHTML}<button id="btn-join-tour" class="btn-save" style="background:#28a745; margin-top:5px;">Turnuvaya Katıl 🎾</button></div>`;
+        }
+
+        regArea.innerHTML = html;
+
+        if (tourData.status === 'Kayıt' && !myRegistration) {
+            if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
+                const selectEl = document.getElementById('tour-partner-select');
+                if (selectEl) {
+                    Object.values(userMap).forEach(player => {
+                        const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
+                        if (player.uid !== myUid && !isOtherRegistered) {
+                            const opt = document.createElement('option'); opt.value = player.uid; opt.textContent = player.isim || player.email; selectEl.appendChild(opt);
+                        }
+                    });
+                }
+            }
+            const joinBtn = document.getElementById('btn-join-tour');
+            if (joinBtn) joinBtn.onclick = () => joinTournament(tourId, tourData, myUid);
+        }
+    }
+
+    // --- YENİ: LİG FİKSTÜRÜ VE HAFTALIK KARIŞIK SİSTEM MOTORU ---
     window.generateLeagueFixture = async function(tourId) {
         if (!confirm("Lig fikstürü oluşturulacak ve maçlar başlayacak. Onaylıyor musunuz?")) return;
         try {
@@ -4072,64 +4256,60 @@ const getPlayerFullName = (p) => {
             const tourData = (await docRef.get()).data();
             let players = tourData.participants || [];
             
-            const isDoubles = !(tourData.format || '').includes('Tekler');
-            const isAuto = isDoubles && tourData.regType === 'auto';
-            const weeks = tourData.leagueWeeks || 1;
+            const isChanging = tourData.leagueTeamType === 'changing';
+            let weeks = 1;
+            
+            if (tourData.leagueDuration === 'all_play_all') {
+                let n = players.length;
+                if (n % 2 !== 0) n++; // BAY için
+                weeks = n - 1;
+            } else {
+                weeks = tourData.leagueWeeks || 1;
+            }
+
             let rounds = [];
 
-            if (isAuto) {
+            if (isChanging) {
                 // SİSTEM 1: HAFTALIK YENİDEN KARIŞTIRILAN (MIX-IN) LİG
-                
-                // HATA BURADAYDI: Takımlara dönüşen listeyi tekrar bireylere ayırıyoruz (Flatten)
                 let individuals = [];
-                players.forEach(team => {
-                    if (team.p1) individuals.push({ p1: team.p1 });
-                    if (team.p2) individuals.push({ p1: team.p2 });
+                players.forEach(p => {
+                    if (p.p1) individuals.push({ p1: p.p1 });
+                    if (p.p2) individuals.push({ p1: p.p2 });
                 });
 
                 for(let w = 0; w < weeks; w++) {
                     let roundMatches = [];
-                    // Her hafta tüm oyuncuları rastgele karıştır
                     let shuffled = [...individuals].sort(() => 0.5 - Math.random());
                     
                     if (tourData.format === 'Mix') {
-                        let males = shuffled.filter(p => userMap[p.p1].cinsiyet !== 'Kadın');
-                        let females = shuffled.filter(p => userMap[p.p1].cinsiyet === 'Kadın');
+                        let males = shuffled.filter(p => userMap[p.p1]?.cinsiyet !== 'Kadın');
+                        let females = shuffled.filter(p => userMap[p.p1]?.cinsiyet === 'Kadın');
                         let teams = [];
-                        
-                        for(let i=0; i<Math.min(males.length, females.length); i++) {
-                            teams.push({p1: males[i].p1, p2: females[i].p1});
-                        }
+                        for(let i=0; i<Math.min(males.length, females.length); i++) teams.push({p1: males[i].p1, p2: females[i].p1});
                         for(let i=0; i<teams.length; i+=2) {
-                            if(i+1 < teams.length) {
-                                roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
-                            }
+                            if(i+1 < teams.length) roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
                         }
                     } else { // Double Erkek / Kadın
                         let teams = [];
                         for(let i=0; i<shuffled.length; i+=2) {
-                            if(i+1 < shuffled.length) {
-                                teams.push({p1: shuffled[i].p1, p2: shuffled[i+1].p1});
-                            }
+                            if(i+1 < shuffled.length) teams.push({p1: shuffled[i].p1, p2: shuffled[i+1].p1});
                         }
                         for(let i=0; i<teams.length; i+=2) {
-                            if(i+1 < teams.length) {
-                                roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
-                            }
+                            if(i+1 < teams.length) roundMatches.push({p1: teams[i], p2: teams[i+1], winner: null, score: null});
                         }
                     }
                     rounds.push({ roundName: (w+1) + ". Hafta", matches: roundMatches });
                 }
             } else {
-                // SİSTEM 2: KLASİK LİG (HERKES HERKESLE BİR KERE OYNAR) - Berger Tablosu
+                // SİSTEM 2: KLASİK LİG (SABİT TAKIMLAR VEYA TEKLER) - Berger Tablosu
                 let n = players.length;
                 let isOdd = n % 2 !== 0;
                 let rrPlayers = [...players];
                 if (isOdd) { rrPlayers.push({ isBye: true }); n++; }
                 
-                let totalRounds = n - 1; let half = n / 2;
+                let half = n / 2;
                 
-                for (let r = 0; r < totalRounds; r++) {
+                for (let w = 0; w < weeks; w++) {
                     let roundMatches = [];
                     for (let i = 0; i < half; i++) {
                         let p1 = rrPlayers[i]; let p2 = rrPlayers[n - 1 - i];
@@ -4137,12 +4317,11 @@ const getPlayerFullName = (p) => {
                             roundMatches.push({p1: p1, p2: p2, winner: null, score: null});
                         }
                     }
-                    rounds.push({ roundName: (r+1) + ". Hafta", matches: roundMatches });
-                    rrPlayers.splice(1, 0, rrPlayers.pop()); // Döndürme Taktiği
+                    rounds.push({ roundName: (w+1) + ". Hafta", matches: roundMatches });
+                    rrPlayers.splice(1, 0, rrPlayers.pop()); 
                 }
             }
             
-            // Veritabanında Maçları Yarat
             for (let r = 0; r < rounds.length; r++) {
                 for (let m = 0; m < rounds[r].matches.length; m++) {
                     let match = rounds[r].matches[m];
