@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (statsViewPlayerSelect) { while(statsViewPlayerSelect.options.length > 1) { statsViewPlayerSelect.remove(1); } }
             snapshot.forEach(doc => {
                 const player = doc.data();
-                userMap[doc.id] = { isim: player.isim || player.email, email: player.email, uid: doc.id, toplamPuan: player.toplamPuan, ciftlerPuani: player.ciftlerPuani, kortTercihi: player.kortTercihi, telefon: player.telefon, fotoURL: player.fotoURL, bildirimTercihi: player.bildirimTercihi || 'ses', tenisBaslangic: player.tenisBaslangic || '', kulup: player.kulup || 'Belirtilmemiş', emailNotifications: (player.emailNotifications !== false), macSayisi: player.macSayisi || 0, galibiyetSayisi: player.galibiyetSayisi || 0, badges: player.badges || [] };
+                userMap[doc.id] = { isim: player.isim || player.email, email: player.email, uid: doc.id, toplamPuan: player.toplamPuan, ciftlerPuani: player.ciftlerPuani, kortTercihi: player.kortTercihi, telefon: player.telefon, fotoURL: player.fotoURL, cinsiyet: player.cinsiyet, bildirimTercihi: player.bildirimTercihi || 'ses', tenisBaslangic: player.tenisBaslangic || '', kulup: player.kulup || 'Belirtilmemiş', emailNotifications: (player.emailNotifications !== false), macSayisi: player.macSayisi || 0, galibiyetSayisi: player.galibiyetSayisi || 0, badges: player.badges || [] };
                 if (filterPlayer) { const option = document.createElement('option'); option.value = doc.id; option.textContent = player.isim || player.email; filterPlayer.appendChild(option); }
                 if (galleryFilterPlayer) { const option = document.createElement('option'); option.value = doc.id; option.textContent = player.isim || player.email; galleryFilterPlayer.appendChild(option); }
                 if (statsViewPlayerSelect && doc.id !== auth.currentUser?.uid) { const opt = document.createElement('option'); opt.value = doc.id; opt.textContent = player.isim || player.email; statsViewPlayerSelect.appendChild(opt); }
@@ -502,7 +502,7 @@ function loadLeaderboard(filterClub = 'all') {
         }
 
         // Mod'a göre sıralama yap
-        if (currentLeaderboardMode === 'Çiftler') {
+        if (currentLeaderboardMode !== 'Tekler') {
             usersArray.sort((a, b) => (b.ciftlerPuani !== undefined ? b.ciftlerPuani : 1000) - (a.ciftlerPuani !== undefined ? a.ciftlerPuani : 1000));
         } else {
             usersArray.sort((a, b) => (b.toplamPuan || 0) - (a.toplamPuan || 0));
@@ -512,7 +512,7 @@ function loadLeaderboard(filterClub = 'all') {
         let rank = 1; let displayedCount = 0;
 
         usersArray.forEach(player => {
-            const score = currentLeaderboardMode === 'Çiftler' ? (player.ciftlerPuani !== undefined ? player.ciftlerPuani : 1000) : (player.toplamPuan || 0);
+            const score = currentLeaderboardMode !== 'Tekler' ? (player.ciftlerPuani !== undefined ? player.ciftlerPuani : 1000) : (player.toplamPuan || 0);
             const photoURL = player.fotoURL || getSafeAvatar(player.isim || player.email);
             const badgeHTML = getLeagueBadgeHTML(score);
             const clubDisplay = player.kulup ? player.kulup : 'Kulüpsüz';
@@ -710,7 +710,7 @@ function openLobbyDetail(type, data) {
         } else if (type === 'ad') {
             // --- ÇİFTLER İÇİN PARTNER SEÇİM KUTUSU ---
             let partnerSelectHTML = '';
-            if (data.macFormati === 'Çiftler' && data.isEligible) {
+            if (data.macFormati !== 'Tekler' && data.isEligible) {
                 let options = '<option value="">Takım Arkadaşını Seç</option>';
                 Object.values(userMap).forEach(p => {
                     if (p.uid !== auth.currentUser.uid && p.uid !== data.oyuncu1ID) {
@@ -742,11 +742,11 @@ async function loadAnnouncements() {
                 
                 // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
                 let team1Name = p1Name.split(' ')[0];
-                if (m.macFormati === 'Çiftler' && m.oyuncu1PartnerID && userMap[m.oyuncu1PartnerID]) {
+                if (m.macFormati !== 'Tekler' && m.oyuncu1PartnerID && userMap[m.oyuncu1PartnerID]) {
                     team1Name += ` & ${userMap[m.oyuncu1PartnerID].isim.split(' ')[0]}`;
                 }
                 let team2Name = p2Name.split(' ')[0];
-                if (m.macFormati === 'Çiftler' && m.oyuncu2PartnerID && userMap[m.oyuncu2PartnerID]) {
+                if (m.macFormati !== 'Tekler' && m.oyuncu2PartnerID && userMap[m.oyuncu2PartnerID]) {
                     team2Name += ` & ${userMap[m.oyuncu2PartnerID].isim.split(' ')[0]}`;
                 }
                 // ------------------------------------
@@ -779,7 +779,7 @@ function loadOpenRequests() {
                 
                 // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
                 let team1Name = p1Name.split(' ')[0];
-                if (data.macFormati === 'Çiftler' && data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
+                if (data.macFormati !== 'Tekler' && data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
                     team1Name += ` & ${userMap[data.oyuncu1PartnerID].isim.split(' ')[0]}`;
                 }
                 // ------------------------------------
@@ -803,7 +803,7 @@ function loadOpenRequests() {
                 };
 
                 const div = document.createElement('div'); div.className = 'compact-news-row'; if(!isEligible) div.style.opacity = '0.6'; div.onclick = () => openLobbyDetail('ad', modalData);
-                div.innerHTML = `<div class="compact-left"><img src="${p1?.fotoURL || getSafeAvatar(p1Name)}" class="compact-avatar"></div><div class="compact-mid"><div class="compact-title">${team1Name}</div><div class="compact-subtitle">${isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı'} ${data.macFormati === 'Çiftler' ? '(Çiftler 👥)' : ''}</div></div><div class="compact-right"><span class="compact-badge ${badgeClass}">${badgeText}</span></div>`;
+                div.innerHTML = `<div class="compact-left"><img src="${p1?.fotoURL || getSafeAvatar(p1Name)}" class="compact-avatar"></div><div class="compact-mid"><div class="compact-title">${team1Name}</div><div class="compact-subtitle">${isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı'} ${data.macFormati !== 'Tekler' ? '(Çiftler 👥)' : ''}</div></div><div class="compact-right"><span class="compact-badge ${badgeClass}">${badgeText}</span></div>`;
                 openRequestsContainer.appendChild(div);
             });
         });
@@ -822,11 +822,11 @@ function loadScheduledMatches() {
                 
                 // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
                 let team1Name = p1Name.split(' ')[0];
-                if (match.macFormati === 'Çiftler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
+                if (match.macFormati !== 'Tekler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
                     team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
                 }
                 let team2Name = p2Name.split(' ')[0];
-                if (match.macFormati === 'Çiftler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
+                if (match.macFormati !== 'Tekler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
                     team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
                 }
                 // ------------------------------------
@@ -844,7 +844,7 @@ function loadScheduledMatches() {
 
 async function acceptOpenRequest(matchId, wager, type, macFormati) {
         let partnerID = null;
-        if (macFormati === 'Çiftler') {
+        if (macFormati !== 'Tekler') {
             const partnerSelect = document.getElementById('accept-ad-partner');
             if (!partnerSelect || !partnerSelect.value) return alert("Çiftler maçı için lütfen bir partner seçin!");
             partnerID = partnerSelect.value;
@@ -1214,11 +1214,11 @@ function showMatchDetail(matchDocId) {
             
             // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA ---
             let team1Name = p1Name.split(' ')[0]; 
-            if (match.macFormati === 'Çiftler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
+            if (match.macFormati !== 'Tekler' && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
                 team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
             }
             let team2Name = p2Name.split(' ')[0];
-            if (match.macFormati === 'Çiftler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
+            if (match.macFormati !== 'Tekler' && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
                 team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
             }
             // ---------------------------------------------
@@ -1226,7 +1226,7 @@ function showMatchDetail(matchDocId) {
             winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
             if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
             
-            let infoHTML = `<h3>${match.macTipi} ${match.macFormati === 'Çiftler' ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
+            let infoHTML = `<h3>${match.macTipi} ${match.macFormati !== 'Tekler' ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
             if(match.durum === 'Acik_Ilan') infoHTML += `<p style="color:orange; font-weight:bold;">Bu bir açık ilandır.</p>`;
             
             const courtType = match.kortTipi ? ` (${match.kortTipi})` : '';
@@ -1276,7 +1276,7 @@ function showMatchDetail(matchDocId) {
 
             if (match.durum === 'Bekliyor') {
                 if (currentUserID === match.oyuncu2ID) {
-                    if (match.macFormati === 'Çiftler') {
+                    if (match.macFormati !== 'Tekler') {
                         const label = document.createElement('label'); label.textContent = "Takım Arkadaşın (Partnerin):"; label.className = "input-label"; label.style.marginTop = "0";
                         const s = document.createElement('select'); s.id = 'accept-challenge-partner'; s.style.marginBottom = '15px'; s.innerHTML = '<option value="">Partnerini Seç</option>';
                         Object.values(userMap).forEach(p => { if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) { s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; } });
@@ -1285,7 +1285,7 @@ function showMatchDetail(matchDocId) {
                     const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
                     ab.onclick = async () => {
                         let partnerID = null;
-                        if (match.macFormati === 'Çiftler') {
+                        if (match.macFormati !== 'Tekler') {
                             const pSelect = document.getElementById('accept-challenge-partner');
                             if (!pSelect.value) return alert("Lütfen partnerini seç!"); partnerID = pSelect.value;
                         }
@@ -1585,7 +1585,7 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
 
             let players = [...participants].map(p => {
                  let pts = userMap[p.p1]?.toplamPuan || 0;
-                 if (tourData.format === 'Çiftler' && p.p2) pts += (userMap[p.p2]?.toplamPuan || 0);
+                 if (tourData.format !== 'Tekler' && p.p2) pts += (userMap[p.p2]?.toplamPuan || 0);
                  return { ...p, points: pts };
             });
             players.sort((a, b) => b.points - a.points);
@@ -1895,7 +1895,7 @@ function showNotification(msg, type='info') {
             else if (targetId === 'tab-profile') {
                 const u = userMap[auth.currentUser.uid];
                 if(u) {
-                    editFullNameInput.value = u.isim || ''; editCourtPreference.value = u.kortTercihi || 'Her İkisi'; document.getElementById('edit-start-date').value = u.tenisBaslangic || ''; document.getElementById('edit-club').value = u.kulup || '';
+                    editFullNameInput.value = u.isim || ''; editCourtPreference.value = u.kortTercihi || 'Her İkisi'; const editGender = document.getElementById('edit-gender'); if(editGender) editGender.value = u.cinsiyet || 'Erkek'; document.getElementById('edit-start-date').value = u.tenisBaslangic || ''; document.getElementById('edit-club').value = u.kulup || '';
                     if(editNotificationPreference) editNotificationPreference.value = u.bildirimTercihi || 'ses'; if(editProfilePreview) editProfilePreview.src = u.fotoURL || getSafeAvatar(u.isim);
                     const emailCheckbox = document.getElementById('edit-email-notify'); if(emailCheckbox) { emailCheckbox.checked = (u.emailNotifications !== false); }
                     renderBadges(auth.currentUser.uid, 'my-badges-container'); loadUserPhotos();
@@ -1914,7 +1914,7 @@ function showNotification(msg, type='info') {
         try {
             const f = editProfilePhotoInput.files[0]; let url = userMap[auth.currentUser.uid].fotoURL; 
             if(f) url = await compressAndConvertToBase64(f, 600);
-            await db.collection('users').doc(auth.currentUser.uid).update({ isim: editFullNameInput.value, kortTercihi: editCourtPreference.value, bildirimTercihi: editNotificationPreference.value, emailNotifications: document.getElementById('edit-email-notify').checked, tenisBaslangic: document.getElementById('edit-start-date').value, kulup: document.getElementById('edit-club').value, fotoURL: url });
+            await db.collection('users').doc(auth.currentUser.uid).update({ isim: editFullNameInput.value, kortTercihi: editCourtPreference.value, cinsiyet: document.getElementById('edit-gender').value, bildirimTercihi: editNotificationPreference.value, emailNotifications: document.getElementById('edit-email-notify').checked, tenisBaslangic: document.getElementById('edit-start-date').value, kulup: document.getElementById('edit-club').value, fotoURL: url });
             alert("Profil güncellendi! ✅"); location.reload(); 
         } catch (error) { console.error("Hata:", error); alert("Hata: " + error.message); btn.disabled = false; btn.textContent = "Kaydet ve Güncelle"; }
     });
@@ -1931,12 +1931,12 @@ function showNotification(msg, type='info') {
     // Çiftler seçildiğinde partner menüsünü göster
     if(adMatchFormat) {
     adMatchFormat.addEventListener('change', (e) => {
-        adPartnerContainer.style.display = e.target.value === 'Çiftler' ? 'block' : 'none';
+        adPartnerContainer.style.display = e.target.value !== 'Tekler' ? 'block' : 'none';
     });
     }
     if(challengeMatchFormat) {
     challengeMatchFormat.addEventListener('change', (e) => {
-        challengePartnerContainer.style.display = e.target.value === 'Çiftler' ? 'block' : 'none';
+        challengePartnerContainer.style.display = e.target.value !== 'Tekler' ? 'block' : 'none';
     });
     }
 
@@ -2005,7 +2005,7 @@ function showNotification(msg, type='info') {
                 try {
                     const c = await auth.createUserWithEmailAndPassword(email, password); let url = null;
                     if(profilePhotoInput.files[0]) url = await compressAndConvertToBase64(profilePhotoInput.files[0], 800, 0.8);
-                    await db.collection('users').doc(c.user.uid).set({ email: email, isim: fullNameInput.value || email.split('@')[0], kortTercihi: courtPreferenceSelect.value || 'Farketmez', tenisBaslangic: document.getElementById('register-start-date').value || '', kulup: document.getElementById('register-club').value || '', fotoURL: url, toplamPuan: 1000, bildirimTercihi: 'ses', emailNotifications: true, macSayisi: 0, galibiyetSayisi: 0, badges: [], kayitTari: firebase.firestore.FieldValue.serverTimestamp() });
+                    await db.collection('users').doc(c.user.uid).set({ email: email, isim: fullNameInput.value || email.split('@')[0], kortTercihi: courtPreferenceSelect.value || 'Farketmez', cinsiyet: document.getElementById('register-gender').value || 'Erkek', tenisBaslangic: document.getElementById('register-start-date').value || '', kulup: document.getElementById('register-club').value || '', fotoURL: url, toplamPuan: 1000, bildirimTercihi: 'ses', emailNotifications: true, macSayisi: 0, galibiyetSayisi: 0, badges: [], kayitTari: firebase.firestore.FieldValue.serverTimestamp() });
                 } catch(e) { authError.style.display = 'block'; authError.textContent = "Kayıt Hatası: " + e.message; }
             }
         });
@@ -2024,10 +2024,10 @@ submitChallengeBtn.addEventListener('click', async () => {
         if (!oid) return alert("Lütfen bir rakip seçin!");
         
         // --- YENİ EKLENEN PARTNER DOĞRULAMASI ---
-        if (format === 'Çiftler' && !partnerID) {
+        if (format !== 'Tekler' && !partnerID) {
             return alert("Lütfen çiftler maçı için bir partner seçin!");
         }
-        if (format === 'Çiftler' && partnerID === oid) {
+        if (format !== 'Tekler' && partnerID === oid) {
             return alert("Partneriniz ile rakibiniz aynı kişi olamaz!");
         }
         // ----------------------------------------
@@ -2047,7 +2047,7 @@ submitChallengeBtn.addEventListener('click', async () => {
             // --- EKLENEN YENİ ALANLAR (macFormati, oyuncu1PartnerID, oyuncu2PartnerID) ---
             await db.collection('matches').add({ 
                 oyuncu1ID: auth.currentUser.uid, 
-                oyuncu1PartnerID: format === 'Çiftler' ? partnerID : null,
+                oyuncu1PartnerID: format !== 'Tekler' ? partnerID : null,
                 oyuncu2ID: oid, 
                 oyuncu2PartnerID: null, // Rakip maçı kabul ederken kendi partnerini seçecek
                 macFormati: format,
@@ -2080,7 +2080,7 @@ submitChallengeBtn.addEventListener('click', async () => {
         if (allowedLeagues.length === 0) { return alert("Lütfen bu ilanı kabul edebilecek en az bir lig seçin!"); }
         
         // --- YENİ EKLENEN PARTNER DOĞRULAMASI ---
-        if (format === 'Çiftler' && !partnerID) {
+        if (format !== 'Tekler' && !partnerID) {
             return alert("Lütfen çiftler maçı için bir partner seçin!");
         }
         // ----------------------------------------
@@ -2093,7 +2093,7 @@ submitChallengeBtn.addEventListener('click', async () => {
             // --- EKLENEN YENİ ALANLAR (macFormati, oyuncu1PartnerID, oyuncu2PartnerID) ---
             await db.collection('matches').add({ 
                 oyuncu1ID: auth.currentUser.uid, 
-                oyuncu1PartnerID: format === 'Çiftler' ? partnerID : null,
+                oyuncu1PartnerID: format !== 'Tekler' ? partnerID : null,
                 oyuncu2ID: null, 
                 oyuncu2PartnerID: null,
                 macFormati: format,
@@ -2517,9 +2517,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 if(m.oyuncu1PartnerID) uniqueUsersToBadge.add(m.oyuncu1PartnerID);
                 if(m.oyuncu2PartnerID) uniqueUsersToBadge.add(m.oyuncu2PartnerID);
 
-                if (m.macFormati !== 'Çiftler') {
-                    batch.update(doc.ref, { macFormati: 'Çiftler' });
-                }
+                if (m.macFormati === 'Tekler' && (m.oyuncu1PartnerID || m.oyuncu2PartnerID)) { batch.update(doc.ref, { macFormati: 'Çiftler' }); }
 
                 if (m.matchTag && wid) {
                     await window.advanceTournamentBracket(tourId, m.matchTag, wid);
@@ -2611,7 +2609,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
                     <label class="input-label">Oyuncu 1</label>
                     <select id="admin-p1-select"></select>
-                    ${tourData.format === 'Çiftler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
+                    ${tourData.format !== 'Tekler' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
                     <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
                 </div>
                 
@@ -2697,7 +2695,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                     const reverseStats = (uid, pts, isWin) => {
                         if (!uid) return;
                         const userRef = db.collection('users').doc(uid);
-                        if (m.macFormati === 'Çiftler') {
+                        if (m.macFormati !== 'Tekler') {
                             batch.update(userRef, { ciftlerPuani: firebase.firestore.FieldValue.increment(pts) });
                         } else {
                             batch.update(userRef, { 
@@ -2710,7 +2708,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
 
                     reverseStats(wid, pointsToSubtractW, true);
                     reverseStats(lid, pointsToSubtractL, false);
-                    if (m.macFormati === 'Çiftler') {
+                    if (m.macFormati !== 'Tekler') {
                         reverseStats(wPartnerId, pointsToSubtractW, true);
                         reverseStats(lPartnerId, pointsToSubtractL, false);
                     }
@@ -2781,13 +2779,13 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             regArea.innerHTML = html;
         } else {
             let partnerSelectHTML = '';
-            if (tourData.format === 'Çiftler') {
+            if (tourData.format !== 'Tekler') {
                 partnerSelectHTML = `<label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label><select id="tour-partner-select" style="margin-bottom:15px;"><option value="">Lütfen Bir Partner Seçin</option></select>`;
             }
             html += `<div style="background:#f8f9fa; padding:15px; border-radius:12px; border:1px solid #eee;">${partnerSelectHTML}<button id="btn-join-tour" class="btn-save" style="background:#28a745; margin-top:5px;">Turnuvaya Katıl 🎾</button></div>`;
             regArea.innerHTML = html;
 
-            if (tourData.format === 'Çiftler') {
+            if (tourData.format !== 'Tekler') {
                 const selectEl = document.getElementById('tour-partner-select');
                 Object.values(userMap).forEach(player => {
                     const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
@@ -2800,14 +2798,24 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         }
     }
 
-    // --- 3. KAYIT VE İPTAL İŞLEMLERİ ---
-    async function joinTournament(tourId, tourData, myUid) {
+async function joinTournament(tourId, tourData, myUid) {
         const me = userMap[myUid];
         if (me.toplamPuan < tourData.fee) return alert(`Bu turnuvaya katılmak için en az ${tourData.fee} puana ihtiyacın var.`);
         let newRegistration = { p1: myUid, p2: null };
-        if (tourData.format === 'Çiftler') {
+        const format = tourData.format || 'Tekler';
+        
+        if (format !== 'Tekler') {
             const partnerId = document.getElementById('tour-partner-select').value;
             if (!partnerId) return alert("Lütfen partner seçin!");
+            
+            const p1Gender = me.cinsiyet;
+            const p2Gender = userMap[partnerId]?.cinsiyet;
+            
+            if (!p1Gender || !p2Gender) return alert("Sizin veya partnerinizin cinsiyet bilgisi eksik. Lütfen profillerinizi güncelleyin.");
+            if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Bu turnuvaya sadece Erkek-Erkek takımları katılabilir.");
+            if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Bu turnuvaya sadece Kadın-Kadın takımları katılabilir.");
+            if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix turnuvasına bir Kadın ve bir Erkek oyuncudan oluşan takımlar katılabilir.");
+            
             newRegistration.p2 = partnerId;
         }
         try {
@@ -2852,11 +2860,22 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         if (p1Select) p1Select.innerHTML = optionsHTML; if (p2Select) p2Select.innerHTML = optionsHTML;
     }
 
-    window.adminAddParticipant = async function(tourId) {
+ window.adminAddParticipant = async function(tourId) {
         const p1 = document.getElementById('admin-p1-select').value; const p2 = document.getElementById('admin-p2-select')?.value || null;
         if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
         try {
             const docRef = db.collection('tournaments').doc(tourId); const docSnap = await docRef.get(); const tourData = docSnap.data();
+            const format = tourData.format || 'Tekler';
+
+            if (format !== 'Tekler') {
+                if (!p2) return alert("Bu formatta partner seçmek zorunludur.");
+                const p1Gender = userMap[p1]?.cinsiyet; const p2Gender = userMap[p2]?.cinsiyet;
+                if (!p1Gender || !p2Gender) return alert("Oyuncuların cinsiyet bilgisi eksik. Önce profillerini güncellemeleri gerek.");
+                if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
+                if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
+                if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix için 1 Kadın 1 Erkek gerekli.");
+            }
+
             const newPlayerObj = { p1, p2, points: 0 }; 
             if (tourData.status === 'Format_Secimi') return alert("Kayıtlar kilitli. Eklemek için kayıtları açın.");
             if (tourData.status === 'Kayıt' || !tourData.bracket) {
@@ -2871,7 +2890,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 if (byeFound) {
                     let parts = tourData.participants || []; parts.push(newPlayerObj);
                     await docRef.update({ participants: parts, bracket: bracket }); alert("Yeni oyuncu BAY slotuna yerleştirildi 🎾");
-                } else { return alert("Ağaçta boş yer (BAY) kalmamış! Ağacı bozmamak için eklenemez."); }
+                } else { return alert("Ağaçta boş yer (BAY) kalmamış!"); }
             }
             openTournamentDetail(tourId, { ...(await docRef.get()).data(), id: tourId });
         } catch(e) { alert("Hata: " + e.message); }
@@ -3103,7 +3122,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
         let wPartnerId = null; let lPartnerId = null;
-        if (m.macFormati === 'Çiftler') {
+        if (m.macFormati !== 'Tekler') {
             wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
             lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
         }
@@ -3135,7 +3154,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             const pts = isWin ? winPoints : losePoints;
             const gInc = isWin ? 1 : 0;
             
-            if (m.macFormati === 'Çiftler') {
+            if (m.macFormati !== 'Tekler') {
                 const uData = userMap[uid] || {};
                 const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
                 batch.update(ref, { 
@@ -3153,7 +3172,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         };
 
         updateStats(wid, true); updateStats(lid, false);
-        if (m.macFormati === 'Çiftler') { updateStats(wPartnerId, true); updateStats(lPartnerId, false); }
+        if (m.macFormati !== 'Tekler') { updateStats(wPartnerId, true); updateStats(lPartnerId, false); }
 
         const matchRef = db.collection('matches').doc(id);
         batch.update(matchRef, { durum: 'Tamamlandı', kayitliKazananID: wid });
@@ -3189,7 +3208,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
         const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
         let wPartnerId = null; let lPartnerId = null;
-        if (m.macFormati === 'Çiftler') {
+        if (m.macFormati !== 'Tekler') {
             wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
             lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
         }
@@ -3214,7 +3233,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             const pts = isWin ? winPoints : losePoints;
             const gInc = isWin ? 1 : 0;
             
-            if (m.macFormati === 'Çiftler') {
+            if (m.macFormati !== 'Tekler') {
                 const uData = userMap[uid] || {};
                 const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
                 batch.update(ref, { 
@@ -3233,7 +3252,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
 
         updateStats(wid, true); 
         updateStats(lid, false);
-        if (m.macFormati === 'Çiftler') { 
+        if (m.macFormati !== 'Tekler') { 
             updateStats(wPartnerId, true); 
             updateStats(lPartnerId, false); 
         }
@@ -3281,7 +3300,7 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 }
             });
             const getRate = (uid) => { if(!gameStats[uid] || gameStats[uid].p === 0) return 0; return (gameStats[uid].w / gameStats[uid].p) * 100; };
-            let players = [...tourData.participants].map(p => { let r = getRate(p.p1); if (tourData.format === 'Çiftler' && p.p2) { r = (getRate(p.p1) + getRate(p.p2)) / 2; } return { ...p, points: r }; });
+            let players = [...tourData.participants].map(p => { let r = getRate(p.p1); if (tourData.format !== 'Tekler' && p.p2) { r = (getRate(p.p1) + getRate(p.p2)) / 2; } return { ...p, points: r }; });
             players.sort((a, b) => b.points - a.points); 
 
             // Bracket Boyutu
@@ -3587,7 +3606,7 @@ const getPlayerFullName = (p) => {
 
                 // Partnerleri de yakala
                 let wPartnerId = null; let lPartnerId = null;
-                if (m.macFormati === 'Çiftler') {
+                if (m.macFormati !== 'Tekler') {
                     wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
                     lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
                 }
@@ -3620,7 +3639,7 @@ const getPlayerFullName = (p) => {
                     userStats[uid].macSayisi += 1;
                     if(isWin) userStats[uid].galibiyetSayisi += 1;
 
-                    if (m.macFormati === 'Çiftler') {
+                    if (m.macFormati !== 'Tekler') {
                         userStats[uid].ciftlerPuani += isWin ? winPoints : losePoints;
                     } else {
                         userStats[uid].toplamPuan += isWin ? winPoints : losePoints;
@@ -3630,7 +3649,7 @@ const getPlayerFullName = (p) => {
                 // Puanları Dağıt
                 applyToUser(wid, true);
                 applyToUser(lid, false);
-                if (m.macFormati === 'Çiftler') {
+                if (m.macFormati !== 'Tekler') {
                     applyToUser(wPartnerId, true);
                     applyToUser(lPartnerId, false);
                 }
