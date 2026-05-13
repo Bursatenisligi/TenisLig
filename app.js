@@ -26,12 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const challengePartnerContainer = document.getElementById('challenge-partner-container');
     const challengePartnerSelect = document.getElementById('challenge-partner-select');
     
-// --- YENİ: AKILLI TURNUVA FORMU GİZLE/GÖSTER MOTORU ---
-    const formatSel = document.getElementById('tour-format');
-    const systemSel = document.getElementById('tour-system');
-    const regTypeSel = document.getElementById('tour-reg-type');
-    const leagueDurSel = document.getElementById('tour-league-duration');
-    const leagueTeamTypeSel = document.getElementById('tour-league-team-type');
+
     
 // --- YENİ: AKILLI TURNUVA FORMU GİZLE/GÖSTER MOTORU ---
     const formatSel = document.getElementById('tour-format');
@@ -93,12 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (autoTypeSel) autoTypeSel.addEventListener('change', updateTourFormUI);
     setTimeout(updateTourFormUI, 500);
 
-    if (formatSel) formatSel.addEventListener('change', updateTourFormUI);
-    if (systemSel) systemSel.addEventListener('change', updateTourFormUI);
-    if (regTypeSel) regTypeSel.addEventListener('change', updateTourFormUI);
-    if (leagueDurSel) leagueDurSel.addEventListener('change', updateTourFormUI);
-    if (leagueTeamTypeSel) leagueTeamTypeSel.addEventListener('change', updateTourFormUI);
-    setTimeout(updateTourFormUI, 500);
+   
     
     // --- KORT LİSTESİ ---
     const COURT_LIST = [

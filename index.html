@@ -234,32 +234,6 @@
         <label class="input-label">Turnuva Adı</label>
         <input type="text" id="tour-name" placeholder="Örn: Bursa Bahar Kupası">
         
-<label class="input-label">Format</label>
-        <select id="tour-format">
-            <option value="Tekler Karışık">Tekler Karışık</option>
-            <option value="Tekler Erkek">Tekler Erkek</option>
-            <option value="Tekler Kadın">Tekler Kadın</option>
-            <option value="Mix">Mix</option>
-            <option value="Double Erkek">Double Erkek</option>
-            <option value="Double Kadın">Double Kadın</option>
-        </select>
-
-        <div id="doubles-options" style="display:none; background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
-            <label class="input-label" style="margin-top:0;">Çiftler Kayıt Tipi</label>
-            <select id="tour-reg-type">
-                <option value="manual">Takım Kaydı (Oyuncular Partnerini Kendi Seçer)</option>
-                <option value="auto">Bireysel Kayıt (Sistem Takımları Kendi Kurar)</option>
-            </select>
-            
-            <div id="auto-options" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0;">Otomatik Eşleşme Mantığı</label>
-                <select id="tour-auto-type">
-                    <option value="balanced">Puanlara Göre Denk Takımlar (Sıralı)</option>
-                    <option value="random">Gelişigüzel (Kura İle)</option>
-                </select>
-            </div>
-        </div>
-
 <label class="input-label">Turnuva İlerleyiş Sistemi</label>
         <select id="tour-system">
             <option value="group_knockout">Grup Aşaması + Eleme</option>
@@ -296,6 +270,31 @@
             </div>
         </div>
 
+        <label class="input-label">Format</label>
+        <select id="tour-format">
+            <option value="Tekler Karışık">Tekler Karışık</option>
+            <option value="Tekler Erkek">Tekler Erkek</option>
+            <option value="Tekler Kadın">Tekler Kadın</option>
+            <option value="Mix">Mix</option>
+            <option value="Double Erkek">Double Erkek</option>
+            <option value="Double Kadın">Double Kadın</option>
+        </select>
+
+        <div id="doubles-options" style="display:none; background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
+            <label class="input-label" style="margin-top:0;">Çiftler Kayıt Tipi</label>
+            <select id="tour-reg-type">
+                <option value="manual">Takım Kaydı (Oyuncular Partnerini Kendi Seçer)</option>
+                <option value="auto">Bireysel Kayıt (Sistem Takımları Kendi Kurar)</option>
+            </select>
+            
+            <div id="auto-options" style="display:none; margin-top:10px;">
+                <label class="input-label" style="margin-top:0;">Otomatik Eşleşme Mantığı</label>
+                <select id="tour-auto-type">
+                    <option value="balanced">Puanlara Göre Denk Takımlar (Sıralı)</option>
+                    <option value="random">Gelişigüzel (Kura İle)</option>
+                </select>
+            </div>
+        </div>
 <label class="input-label">Grup Puanlama Sistemi</label>
         <select id="tour-points-system">
             <option value="winRate">Oyun Kazanma Oranı (%)</option>
@@ -786,13 +785,7 @@
         </div>
 
         <div id="notification-container"></div>
-        <div id="lobby-detail-modal" class="modal" style="display: none; z-index: 2500;">
-            <div class="modal-content">
-                <span onclick="document.getElementById('lobby-detail-modal').style.display='none'" class="close-modal">&times;</span>
-                <div id="lobby-detail-content">
-                    </div>
-            </div>
-        </div>
+        
         
     </div>
     
@@ -912,7 +905,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=83"></script>
+    <script src="app.js?=85"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
