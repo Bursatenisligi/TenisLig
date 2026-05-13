@@ -2601,32 +2601,13 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
                 }
             }
 
-            // GRUPLAR BİTTİ Mİ KONTROLÜ VE DEV BUTON
-            let groupFinishHTML = '';
-            if (tourData.stage === 'Grup' && tourData.groups) {
-                let allGroupsFinished = true;
-                tourData.groups.forEach(g => {
-                    if (g.matches.some(m => !m.winner)) allGroupsFinished = false;
-                });
-
-                if (allGroupsFinished) {
-                    groupFinishHTML = `
-                        <div style="width:100%; margin-top:15px; padding:15px; background:#e8f5e9; border-radius:8px; border:1px solid #c3e6cb; text-align:center; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                            <p style="color:#155724; font-weight:bold; margin-top:0; margin-bottom:10px; font-size:1.1em;">🎉 Tüm Grup Maçları Tamamlandı!</p>
-                            <button onclick="transitionToKnockout('${tourId}')" class="btn-main" style="background:#28a745; width:100%; font-size:1em; padding:10px;">🏆 Eleme Ağacına (Fikstüre) Geç</button>
-                        </div>
-                    `;
-                }
-            }
-
-            // EKRANA ÇİZ 
+// EKRANA ÇİZ (Gruplar Bitti Kutusu Tamamen Kaldırıldı)
             adminArea.innerHTML = `
                 <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
                 <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
                     ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
                     ${actionButtonsHTML}
                 </div>
-                ${groupFinishHTML} 
                 <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
                     <label class="input-label">Oyuncu 1</label>
                     <select id="admin-p1-select"></select>
@@ -3518,85 +3499,7 @@ const getPlayerFullName = (p) => {
         scrollSpacer.style.flexShrink = "0";
         container.appendChild(scrollSpacer);
     };
-// --- YÖNETİCİ: GRUPLARI BİTİR VE ELEME AĞACINA GEÇ ---
-    window.transitionToKnockout = async function(tourId) {
-        if(!confirm("Grup maçları bittiğine göre Eleme Ağacı (Fikstür) oluşturulacak. Onaylıyor musunuz?")) return;
-        
-        try {
-            const bracketCont = document.getElementById('tour-bracket-container');
-            if (bracketCont) {
-                bracketCont.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#c06035;">Eleme ağacı hesaplanıyor... Lütfen bekleyin ⏳</p>';
-            }
-            
-            const docRef = db.collection('tournaments').doc(tourId);
-            const tourData = (await docRef.get()).data();
-            
-            const advCount = tourData.advancingCount || 2; 
-            let advancingPlayers = [];
-            
-            tourData.groups.forEach(g => {
-                const qualified = g.players.slice(0, advCount);
-                advancingPlayers.push(...qualified);
-            });
-            
-            // 2. Çıkanları Seçilen Puan Sistemine Göre Küresel Olarak Sırala (Seribaşı Sistemi)
-            advancingPlayers.sort((a, b) => {
-                if (tourData.pointsSystem === 'threePoint') {
-                    if (b.groupPoints !== a.groupPoints) return (b.groupPoints || 0) - (a.groupPoints || 0);
-                    if (b.winRate !== a.winRate) return (b.winRate || 0) - (a.winRate || 0);
-                    return (b.gamesWon || 0) - (a.gamesWon || 0);
-                } else {
-                    if (b.winRate !== a.winRate) return (b.winRate || 0) - (a.winRate || 0);
-                    return (b.gamesWon || 0) - (a.gamesWon || 0);
-                }
-            });
-            
-            const n = advancingPlayers.length;
-            const bracketSize = Math.pow(2, Math.ceil(Math.log2(n)));
-            const byes = bracketSize - n;
-            
-            let playersForBracket = [...advancingPlayers];
-            for(let i=0; i<byes; i++) { playersForBracket.push({ isBye: true }); }
-            
-            function getSeededOrder(size) {
-                if (size <= 1) return [1]; const half = getSeededOrder(size / 2); const res = [];
-                for (let i = 0; i < half.length; i++) { res.push(half[i]); res.push(size - half[i] + 1); } return res;
-            }
-            const seededPositions = getSeededOrder(bracketSize);
-            
-            const rounds = [];
-            let currentSize = bracketSize / 2; let rNum = 1;
-            while(currentSize >= 1) {
-                let rName = rNum + ". Tur"; if(currentSize === 4) rName = "Çeyrek Final"; if(currentSize === 2) rName = "Yarı Final"; if(currentSize === 1) rName = "Final";
-                let mList = []; for(let i=0; i<currentSize; i++) mList.push({ p1: null, p2: null, winner: null, score: null, firestoreMatchId: null });
-                rounds.push({ roundName: rName, matches: mList }); currentSize /= 2; rNum++;
-            }
 
-            for (let i = 0; i < bracketSize; i += 2) {
-                const p1 = playersForBracket[seededPositions[i]-1]; const p2 = playersForBracket[seededPositions[i+1]-1]; const mIdx = i / 2;
-                rounds[0].matches[mIdx].p1 = p1; rounds[0].matches[mIdx].p2 = p2;
-                const autoWinner = p1.isBye ? p2 : (p2.isBye ? p1 : null);
-
-                if (autoWinner) {
-                    rounds[0].matches[mIdx].winner = autoWinner; rounds[0].matches[mIdx].score = "Bay Geçti";
-                    const nextMIdx = Math.floor(mIdx / 2);
-                    if (mIdx % 2 === 0) rounds[1].matches[nextMIdx].p1 = autoWinner; else rounds[1].matches[nextMIdx].p2 = autoWinner;
-                } else {
-                    const mId = await createTournamentMatchDoc(tourId, p1, p2, rounds[0].roundName, `R0_M${mIdx}`);
-                    rounds[0].matches[mIdx].firestoreMatchId = mId;
-                }
-            }
-
-            await docRef.update({
-                stage: 'Eleme', 
-                bracket: rounds
-            });
-            
-            alert("Harika! Gruplar bitti, Eleme Ağacı oluşturuldu! 🚀");
-            openTournamentDetail(tourId, (await docRef.get()).data());
-            
-        } catch(e) { console.error(e); alert("Hata: " + e.message); }
-    };
     // Filtre Butonları (Tekler/Çiftler vb)
     const btnRankSingles = document.getElementById('btn-rank-singles');
     const btnRankDoubles = document.getElementById('btn-rank-doubles');
