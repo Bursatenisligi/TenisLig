@@ -2655,7 +2655,7 @@ if (tourData.status === 'Kayıt') {
                 <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
                     <label class="input-label">Oyuncu 1</label>
                     <select id="admin-p1-select"></select>
-                    ${!(tourData.format || '').includes('Tekler') ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
+                   ${!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
                     <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
                 </div>
                 
@@ -2825,13 +2825,13 @@ if (tourData.status === 'Kayıt') {
             regArea.innerHTML = html;
         } else {
             let partnerSelectHTML = '';
-            if (!(tourData.format || '').includes('Tekler')) {
+            if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 partnerSelectHTML = `<label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label><select id="tour-partner-select" style="margin-bottom:15px;"><option value="">Lütfen Bir Partner Seçin</option></select>`;
             }
             html += `<div style="background:#f8f9fa; padding:15px; border-radius:12px; border:1px solid #eee;">${partnerSelectHTML}<button id="btn-join-tour" class="btn-save" style="background:#28a745; margin-top:5px;">Turnuvaya Katıl 🎾</button></div>`;
             regArea.innerHTML = html;
 
-            if (!(tourData.format || '').includes('Tekler')) {
+            if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 const selectEl = document.getElementById('tour-partner-select');
                 Object.values(userMap).forEach(player => {
                     const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
@@ -2933,6 +2933,7 @@ window.adminAddParticipant = async function(tourId) {
             const tourSnap = await docRef.get();
             const tourData = tourSnap.data();
             const format = tourData.format;
+            const regType = tourData.regType || 'manual';
 
             const p1Gender = userMap[p1]?.cinsiyet;
             if (!p1Gender) return alert("Seçilen oyuncunun cinsiyet bilgisi eksik.");
@@ -2941,8 +2942,14 @@ window.adminAddParticipant = async function(tourId) {
             if (format === 'Tekler Erkek' && p1Gender !== 'Erkek') return alert("Hata: Bu oyuncu Erkek değil.");
             if (format === 'Tekler Kadın' && p1Gender !== 'Kadın') return alert("Hata: Bu oyuncu Kadın değil.");
 
-            // ÇİFTLER KONTROLÜ
-            if (!format.includes('Tekler')) {
+            // ÇİFTLER: OTOMATİK EŞLEŞME (SİSTEM KURACAK) - BİREYSEL KAYIT
+            if (!format.includes('Tekler') && regType === 'auto') {
+                if (format === 'Double Erkek' && p1Gender !== 'Erkek') return alert("Hata: Sadece erkek oyuncu seçebilirsiniz.");
+                if (format === 'Double Kadın' && p1Gender !== 'Kadın') return alert("Hata: Sadece kadın oyuncu seçebilirsiniz.");
+                // Mix için cinsiyet fark etmez, herkes bireysel girer
+            } 
+            // ÇİFTLER: MANUEL TAKIM KAYDI
+            else if (!format.includes('Tekler') && regType === 'manual') {
                 if (!p2) return alert("Bu formatta partner seçmek zorunludur.");
                 const p2Gender = userMap[p2]?.cinsiyet;
                 if (!p2Gender) return alert("Partnerin cinsiyet bilgisi eksik.");
@@ -2952,7 +2959,7 @@ window.adminAddParticipant = async function(tourId) {
                 if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix için 1 Kadın 1 Erkek gerekli.");
             }
 
-            const newPlayerObj = { p1, p2, points: 0 }; 
+            const newPlayerObj = { p1, p2: (regType === 'auto' ? null : p2), points: 0 }; 
             await docRef.update({ participants: firebase.firestore.FieldValue.arrayUnion(newPlayerObj) });
             alert("Oyuncu başarıyla eklendi. ✅");
             openTournamentDetail(tourId, (await docRef.get()).data());
