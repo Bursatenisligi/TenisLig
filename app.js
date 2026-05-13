@@ -2849,6 +2849,7 @@ if (tourData.status === 'Kayıt') {
 
         const myRegistration = participants.find(p => p.p1 === myUid || p.p2 === myUid);
 
+        // --- HATA BURADAYDI: HTML'i biriktirip EN SONDA Ekrana basacağız ---
         if (tourData.status !== 'Kayıt') {
             html += `<div style="background:#fff3cd; padding:10px; border-radius:8px; text-align:center; color:#856404; font-weight:bold;">🔒 Kayıtlar Kapandı</div>`;
         } else if (myRegistration) {
@@ -2857,16 +2858,19 @@ if (tourData.status === 'Kayıt') {
                     <p style="color:#28a745; font-weight:bold; margin-bottom:10px;">✅ Turnuvaya Kayıtlısınız</p>
                     <button onclick="cancelTournamentRegistration('${tourId}', '${myRegistration.p1}', '${myRegistration.p2}')" class="btn-main" style="background:#dc3545; width:auto; padding:8px 20px;">Kaydı İptal Et ❌</button>
                 </div>`;
-            regArea.innerHTML = html;
         } else {
             let partnerSelectHTML = '';
-            // Çiftlerse VE otomatik takım kurulmuyorsa partner seçimini göster
             if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 partnerSelectHTML = `<label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label><select id="tour-partner-select" style="margin-bottom:15px;"><option value="">Lütfen Bir Partner Seçin</option></select>`;
             }
             html += `<div style="background:#f8f9fa; padding:15px; border-radius:12px; border:1px solid #eee;">${partnerSelectHTML}<button id="btn-join-tour" class="btn-save" style="background:#28a745; margin-top:5px;">Turnuvaya Katıl 🎾</button></div>`;
-            regArea.innerHTML = html;
+        }
 
+        // UNUTULAN KOMUT: Hazırlanan HTML'i ekrana çiz!
+        regArea.innerHTML = html;
+
+        // Ekrana çizildikten sonra olayları (tıklamaları vb) bağla
+        if (tourData.status === 'Kayıt' && !myRegistration) {
             if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 const selectEl = document.getElementById('tour-partner-select');
                 if (selectEl) {
@@ -2878,7 +2882,6 @@ if (tourData.status === 'Kayıt') {
                     });
                 }
             }
-            
             const joinBtn = document.getElementById('btn-join-tour');
             if (joinBtn) joinBtn.onclick = () => joinTournament(tourId, tourData, myUid);
         }
