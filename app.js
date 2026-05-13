@@ -2781,7 +2781,7 @@ if (tourData.status === 'Kayıt') {
         }
     };
 
-    // --- 2. KATILIMCI LİSTESİ VE KAYIT ALANI ---
+// --- 2. KATILIMCI LİSTESİ VE KAYIT ALANI ---
     function renderRegistrationArea(tourId, tourData, myUid) {
         const regArea = document.getElementById('tour-registration-area');
         if (!regArea) return;
@@ -2789,24 +2789,59 @@ if (tourData.status === 'Kayıt') {
         const participants = tourData.participants || [];
         const isAdmin = (tourData.creatorId === myUid);
         
+        // YENİ: Sistem tarafından takım kurulup kurulmadığını kontrol et
+        const isAutoTeams = tourData.regType === 'auto' && tourData.teamsGenerated;
+        
         let html = `
             <div style="text-align:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
                 <p style="margin:5px 0;"><strong>Format:</strong> ${tourData.format} | <strong>Ücret:</strong> ${tourData.fee} Puan</p>
             </div>
-            <h4 style="margin-top:0; border:none; font-size:1em; color:#333;">👥 Katılımcı Listesi (${participants.length})</h4>
+            <h4 style="margin-top:0; border:none; font-size:1.1em; color:#0d47a1;">
+                ${isAutoTeams ? '🤝 Sistem Tarafından Kurulan Takımlar' : '👥 Katılımcı Listesi'} (${participants.length})
+            </h4>
         `;
 
         if (participants.length === 0) {
             html += `<p style="text-align:center; color:#999; font-size:0.9em; padding:10px;">Henüz kayıtlı oyuncu yok.</p>`;
         } else {
-            html += `<div class="tour-participants-list" style="margin-bottom:20px; max-height:200px; overflow-y:auto;">`;
+            html += `<div class="tour-participants-list" style="margin-bottom:20px; max-height:350px; overflow-y:auto; padding-right:5px;">`;
+            
             participants.forEach((p, index) => {
-                const p1Name = userMap[p.p1]?.isim || 'Bilinmeyen';
-                const p2Name = p.p2 ? ` & ${userMap[p.p2]?.isim || 'Bilinmeyen'}` : '';
+                const u1 = userMap[p.p1];
+                const u2 = p.p2 ? userMap[p.p2] : null;
+                const p1Name = u1?.isim || 'Bilinmeyen';
+                const p2Name = u2 ? u2.isim : '';
+                
+                let displayHTML = '';
+                
+                // TAKIMLAR KURULDUYSA ÖZEL GÖRÜNÜM
+                if (isAutoTeams) {
+                    const teamPoints = (u1?.toplamPuan || 0) + (u2?.toplamPuan || 0);
+                    displayHTML = `
+                        <div style="flex:1;">
+                            <div style="font-size:0.95em; font-weight:700; color:#333; margin-bottom:3px;">Takım ${index + 1}</div>
+                            <div style="font-size:0.85em; color:#555;">🎾 ${p1Name}</div>
+                            <div style="font-size:0.85em; color:#555;">🎾 ${p2Name}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="background:#e3f2fd; color:#0d47a1; padding:4px 8px; border-radius:12px; font-size:0.8em; font-weight:bold;">${teamPoints} Puan</span>
+                        </div>
+                    `;
+                } 
+                // NORMAL/BİREYSEL KAYIT GÖRÜNÜMÜ
+                else {
+                    const displayName = p.p2 ? `${p1Name} & ${p2Name}` : p1Name;
+                    const pts = (u1?.toplamPuan || 0) + (u2?.toplamPuan || 0);
+                    displayHTML = `
+                        <div style="flex:1; font-size:0.9em; font-weight:600; color:#444;">${index + 1}. ${displayName}</div>
+                        <div style="font-size:0.8em; color:#777;">${pts} P</div>
+                    `;
+                }
+
                 html += `
-                    <div class="modern-list-item" style="padding:10px; margin-bottom:5px; border-left:4px solid #c06035; display:flex; justify-content:space-between; align-items:center;">
-                        <div style="font-size:0.9em; font-weight:600; color:#444;">${index + 1}. ${p1Name}${p2Name}</div>
-                        ${isAdmin ? `<button onclick="adminDeleteParticipant('${tourId}', ${index})" style="width:auto; background:none; color:#dc3545; margin:0; padding:5px; box-shadow:none; font-size:1.2em;">🗑️</button>` : ''}
+                    <div class="modern-list-item" style="padding:12px; margin-bottom:8px; border-left:4px solid ${isAutoTeams ? '#28a745' : '#c06035'}; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+                        ${displayHTML}
+                        ${isAdmin && !isAutoTeams ? `<button onclick="adminDeleteParticipant('${tourId}', ${index})" style="width:auto; background:none; color:#dc3545; margin:0 0 0 10px; padding:5px; box-shadow:none; font-size:1.2em;">🗑️</button>` : ''}
                     </div>`;
             });
             html += `</div>`;
@@ -2825,6 +2860,7 @@ if (tourData.status === 'Kayıt') {
             regArea.innerHTML = html;
         } else {
             let partnerSelectHTML = '';
+            // Çiftlerse VE otomatik takım kurulmuyorsa partner seçimini göster
             if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 partnerSelectHTML = `<label class="input-label" style="color:#c06035; font-weight:bold;">Takım Arkadaşını Seç (Partner)</label><select id="tour-partner-select" style="margin-bottom:15px;"><option value="">Lütfen Bir Partner Seçin</option></select>`;
             }
@@ -2833,14 +2869,18 @@ if (tourData.status === 'Kayıt') {
 
             if (!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto') {
                 const selectEl = document.getElementById('tour-partner-select');
-                Object.values(userMap).forEach(player => {
-                    const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
-                    if (player.uid !== myUid && !isOtherRegistered) {
-                        const opt = document.createElement('option'); opt.value = player.uid; opt.textContent = player.isim || player.email; selectEl.appendChild(opt);
-                    }
-                });
+                if (selectEl) {
+                    Object.values(userMap).forEach(player => {
+                        const isOtherRegistered = participants.some(p => p.p1 === player.uid || p.p2 === player.uid);
+                        if (player.uid !== myUid && !isOtherRegistered) {
+                            const opt = document.createElement('option'); opt.value = player.uid; opt.textContent = player.isim || player.email; selectEl.appendChild(opt);
+                        }
+                    });
+                }
             }
-            document.getElementById('btn-join-tour').onclick = () => joinTournament(tourId, tourData, myUid);
+            
+            const joinBtn = document.getElementById('btn-join-tour');
+            if (joinBtn) joinBtn.onclick = () => joinTournament(tourId, tourData, myUid);
         }
     }
 
