@@ -3581,7 +3581,7 @@ const getPlayerFullName = (p) => {
             const isIndividual = ((tourData.format || '').includes('Tekler') || tourData.standingsType === 'individual' || tourData.leagueTeamType === 'changing');
             let stats = {};
             
-            // İstatistik Havuzunu Kur
+// İstatistik Havuzunu Kur
             tourData.bracket.forEach(round => {
                 round.matches.forEach(m => {
                     if(!m.p1 || !m.p2) return;
@@ -3590,9 +3590,18 @@ const getPlayerFullName = (p) => {
                     const p2Id = isIndividual ? m.p2.p1 : m.p2.p1 + "_" + (m.p2.p2 || '');
                     
                     const addStat = (id, obj) => { if(!stats[id]) stats[id] = { name: getPlayerFullName(obj), pld: 0, w: 0, l: 0, pts: 0, gw: 0, gl: 0, rate: 0 }; };
-                    addStat(p1Id, m.p1); addStat(p2Id, m.p2);
-                    if(isIndividual && m.p1.p2) addStat(m.p1.p2, {p1: m.p1.p2});
-                    if(isIndividual && m.p2.p2) addStat(m.p2.p2, {p1: m.p2.p2});
+                    
+                    // HATA BURADAYDI: Bireysel modda herkesi TEKİL obje olarak fonksiyona gönderiyoruz
+                    if (isIndividual) {
+                        addStat(m.p1.p1, { p1: m.p1.p1 });
+                        if (m.p1.p2) addStat(m.p1.p2, { p1: m.p1.p2 });
+                        
+                        addStat(m.p2.p1, { p1: m.p2.p1 });
+                        if (m.p2.p2) addStat(m.p2.p2, { p1: m.p2.p2 });
+                    } else {
+                        addStat(p1Id, m.p1); 
+                        addStat(p2Id, m.p2);
+                    }
 
                     if (m.winner) {
                         const winId1 = isIndividual ? m.winner.p1 : m.winner.p1 + "_" + (m.winner.p2 || '');
