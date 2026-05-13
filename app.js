@@ -25,7 +25,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const challengeMatchFormat = document.getElementById('challenge-match-format');
     const challengePartnerContainer = document.getElementById('challenge-partner-container');
     const challengePartnerSelect = document.getElementById('challenge-partner-select');
+// --- YENİ: AKILLI TURNUVA FORMU GİZLE/GÖSTER MOTORU ---
+    const formatSel = document.getElementById('tour-format');
+    const systemSel = document.getElementById('tour-system');
+    const regTypeSel = document.getElementById('tour-reg-type');
+    
+    function updateTourFormUI() {
+        if(!formatSel || !systemSel || !regTypeSel) return;
+        const isDoubles = !formatSel.value.includes('Tekler');
+        const isAuto = regTypeSel.value === 'auto';
+        const isLeague = systemSel.value === 'league';
 
+        document.getElementById('doubles-options').style.display = isDoubles ? 'block' : 'none';
+        document.getElementById('auto-options').style.display = (isDoubles && isAuto) ? 'block' : 'none';
+        document.getElementById('league-options').style.display = isLeague ? 'block' : 'none';
+        
+        document.getElementById('league-weeks-container').style.display = (isLeague && isDoubles && isAuto) ? 'block' : 'none';
+        document.getElementById('league-standings-container').style.display = (isLeague && isDoubles && !isAuto) ? 'block' : 'none';
+    }
+
+    if (formatSel) formatSel.addEventListener('change', updateTourFormUI);
+    if (systemSel) systemSel.addEventListener('change', updateTourFormUI);
+    if (regTypeSel) regTypeSel.addEventListener('change', updateTourFormUI);
+    setTimeout(updateTourFormUI, 500); // İlk açılışta tetikle
     
     // --- KORT LİSTESİ ---
     const COURT_LIST = [
@@ -1956,6 +1978,14 @@ function showNotification(msg, type='info') {
             const pointsSystem = document.getElementById('tour-points-system') ? document.getElementById('tour-points-system').value : 'winRate';
             const fee = parseInt(document.getElementById('tour-fee').value) || 0;
             const deadline = document.getElementById('tour-deadline').value;
+            // YENİ KAYIT ALANLARI
+            const isDoubles = !format.includes('Tekler');
+            const regType = isDoubles ? document.getElementById('tour-reg-type').value : 'manual';
+            const autoType = (isDoubles && regType === 'auto') ? document.getElementById('tour-auto-type').value : null;
+            const systemType = document.getElementById('tour-system').value;
+            const leagueWeeks = (systemType === 'league' && isDoubles && regType === 'auto') ? parseInt(document.getElementById('tour-league-weeks').value) : null;
+            let standingsType = 'individual';
+            if (systemType === 'league' && isDoubles && regType === 'manual') standingsType = document.getElementById('tour-standings-type').value;
 
             if(!name || !deadline) return alert("Lütfen turnuva adını ve son kayıt tarihini girin.");
 
@@ -1972,6 +2002,12 @@ function showNotification(msg, type='info') {
                     status: 'Kayıt', 
                     creatorId: auth.currentUser.uid, 
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    regType: regType,
+                    autoType: autoType,
+                    systemType: systemType,
+                    leagueWeeks: leagueWeeks,
+                    standingsType: standingsType,
+                    teamsGenerated: false,
                     participants: [] 
                 });
 
@@ -2580,25 +2616,35 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             }
 
             // Duruma Göre Normal Butonları Ayarla
-            if (tourData.status === 'Kayıt') {
+if (tourData.status === 'Kayıt') {
                 actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
             } else if (tourData.status === 'Format_Secimi') {
+                let generationButtons = '';
+                
+                // 1. ADIM: EĞER OTOMATİK TAKIMSA ÖNCE TAKIMLARI KUR BUTONU
+                if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated) {
+                     generationButtons = `<button onclick="window.generateAutoTeams('${tourId}')" class="btn-main" style="background:#17a2b8; padding:10px; width:100%;">🤖 Sistem Takımlarını Kur (${tourData.autoType === 'balanced' ? 'Denk' : 'Kura'})</button>`;
+                } 
+                // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE) SİSTEMİ BAŞLAT BUTONLARI
+                else {
+                     if (tourData.systemType === 'league') {
+                         generationButtons = `<button onclick="alert('Lig motoru (Aşama 2) yükleniyor...')" class="btn-main" style="background:#20c997; padding:10px; width:100%;">📅 Lig Fikstürünü Çıkar ve Başlat</button>`;
+                     } else if (tourData.systemType === 'knockout') {
+                         generationButtons = `<button onclick="generateKnockoutDraw('${tourId}', true)" class="btn-main" style="background:#6f42c1; padding:10px; width:100%;">🎾 Eleme Ağacını Kur ve Başlat</button>`;
+                     } else {
+                         generationButtons = `<button onclick="document.getElementById('group-settings-area').style.display='block'" class="btn-main" style="background:#007bff; padding:10px; width:100%;">👥 Grupları Kur ve Başlat</button>`;
+                     }
+                }
+                
                 actionButtonsHTML = `
                     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-                        <div style="display:flex; gap:10px;">
-                            <button onclick="generateKnockoutDraw('${tourId}', true)" class="btn-main" style="background:#6f42c1; font-size:0.8em; padding:8px; flex:1;">Direkt Eleme 🎾</button>
-                            <button onclick="document.getElementById('group-settings-area').style.display='block'" class="btn-main" style="background:#007bff; font-size:0.8em; padding:8px; flex:1;">Grup + Eleme 👥</button>
-                        </div>
-                        <button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px;">Kayıtları Tekrar Aç 🔓</button>
+                        ${generationButtons}
+                        <button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Tekrar Aç 🔓</button>
                     </div>`;
             } else {
-                if(!matchStarted) {
-                    actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; font-size:0.8em; padding:8px; flex:1;">Kayıtları Aç 🔓</button>`;
-                } else {
-                    actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center; width:100%; margin:5px 0;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
-                }
+                if(!matchStarted) actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Aç 🔓</button>`;
+                else actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
             }
-
 // EKRANA ÇİZ (Gruplar Bitti Kutusu Tamamen Kaldırıldı)
             adminArea.innerHTML = `
                 <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
@@ -2808,32 +2854,29 @@ async function joinTournament(tourId, tourData, myUid) {
 
         if (!myGender) return alert("Cinsiyet bilginiz eksik. Lütfen profilinizden güncelleyin.");
 
-        // --- TEKLER İÇİN CİNSİYET KONTROLLERİ ---
-        if (format === 'Tekler Erkek' && myGender !== 'Erkek') {
-            return alert("Hata: Bu turnuvaya sadece Erkek oyuncular katılabilir.");
-        }
-        if (format === 'Tekler Kadın' && myGender !== 'Kadın') {
-            return alert("Hata: Bu turnuvaya sadece Kadın oyuncular katılabilir.");
-        }
+const regType = tourData.regType || 'manual';
 
-        // --- ÇİFTLER/MIX İÇİN KONTROLLER ---
-        // 'Tekler' kelimesini içermeyen her formatı Çiftler mantığıyla işliyoruz
-        if (!format.includes('Tekler')) {
+        // --- TEKLER İÇİN CİNSİYET KONTROLLERİ ---
+        if (format === 'Tekler Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece Erkek oyuncular katılabilir.");
+        if (format === 'Tekler Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece Kadın oyuncular katılabilir.");
+
+        // --- ÇİFTLER: OTOMATİK EŞLEŞME (SİSTEM KURACAK) ---
+        if (!format.includes('Tekler') && regType === 'auto') {
+            if (format === 'Double Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece erkekler.");
+            if (format === 'Double Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece kadınlar.");
+            // Mix formatında herkes bireysel kaydolur, sistem eşleştirecek
+            newRegistration.p2 = null; 
+        }
+        // --- ÇİFTLER: MANUEL TAKIM KAYDI ---
+        else if (!format.includes('Tekler') && regType === 'manual') {
             const partnerId = document.getElementById('tour-partner-select').value;
             if (!partnerId) return alert("Lütfen partner seçin!");
-            
             const p2Gender = userMap[partnerId]?.cinsiyet;
             if (!p2Gender) return alert("Partnerinizin cinsiyet bilgisi eksik.");
 
-            if (format === 'Double Erkek' && (myGender !== 'Erkek' || p2Gender !== 'Erkek')) 
-                return alert("Hata: Bu turnuvaya sadece Erkek-Erkek takımları katılabilir.");
-            
-            if (format === 'Double Kadın' && (myGender !== 'Kadın' || p2Gender !== 'Kadın')) 
-                return alert("Hata: Bu turnuvaya sadece Kadın-Kadın takımları katılabilir.");
-            
-            if (format === 'Mix' && (myGender === p2Gender)) 
-                return alert("Hata: Mix turnuvasına bir Kadın ve bir Erkek oyuncu katılmalıdır.");
-            
+            if (format === 'Double Erkek' && (myGender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
+            if (format === 'Double Kadın' && (myGender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
+            if (format === 'Mix' && (myGender === p2Gender)) return alert("Hata: Mix turnuvasına bir Kadın ve bir Erkek katılmalıdır.");
             newRegistration.p2 = partnerId;
         }
 
@@ -3697,6 +3740,55 @@ const getPlayerFullName = (p) => {
             if(document.getElementById('recalc-loading')) document.getElementById('recalc-loading').remove();
         }
     };
-
+// --- YENİ: OTOMATİK DENK/KURA TAKIM KURMA ALGORİTMASI ---
+    window.generateAutoTeams = async function(tourId) {
+        try {
+            const docRef = db.collection('tournaments').doc(tourId);
+            const data = (await docRef.get()).data();
+            let players = data.participants || [];
+            
+            if (data.format === 'Mix') {
+                let males = []; let females = [];
+                players.forEach(p => {
+                    const u = userMap[p.p1];
+                    if(u.cinsiyet === 'Kadın') females.push({uid: p.p1, pts: u.toplamPuan});
+                    else males.push({uid: p.p1, pts: u.toplamPuan});
+                });
+                
+                if (males.length !== females.length) return alert(`🚨 Mix turnuvası için Kadın ve Erkek sayıları EŞİT olmalıdır! \nMevcut Kayıt: ${males.length} Erkek, ${females.length} Kadın. Lütfen eksik oyuncuları kayıt edin veya fazla olanları çıkarın.`);
+                
+                if (data.autoType === 'balanced') {
+                    males.sort((a,b) => b.pts - a.pts); // Erkekleri Büyükten Küçüğe
+                    females.sort((a,b) => a.pts - b.pts); // Kadınları Küçükten Büyüğe (Dengelemek için)
+                } else {
+                    males.sort(() => 0.5 - Math.random());
+                    females.sort(() => 0.5 - Math.random());
+                }
+                
+                let newTeams = [];
+                for(let i=0; i<males.length; i++) {
+                    newTeams.push({ p1: males[i].uid, p2: females[i].uid, points: 0 });
+                }
+                await docRef.update({ participants: newTeams, teamsGenerated: true });
+                alert("Müthiş! Mix takımları puan dengesi gözetilerek (En iyi erkek + En zayıf kadın) başarıyla eşleştirildi! ✅ Artık fikstürü çekebilirsiniz.");
+                openTournamentDetail(tourId, (await docRef.get()).data());
+                
+            } else { // Double Erkek veya Double Kadın
+                if (players.length % 2 !== 0) return alert(`🚨 Eşleşme için toplam oyuncu sayısı ÇİFT olmalıdır! (Mevcut: ${players.length})`);
+                
+                let all = players.map(p => ({uid: p.p1, pts: userMap[p.p1].toplamPuan}));
+                if (data.autoType === 'balanced') { all.sort((a,b) => b.pts - a.pts); } 
+                else { all.sort(() => 0.5 - Math.random()); }
+                
+                let newTeams = [];
+                for(let i=0; i<all.length/2; i++) {
+                    newTeams.push({ p1: all[i].uid, p2: all[all.length - 1 - i].uid, points: 0 }); // Yılan mantığı (1. ile Sonuncu)
+                }
+                await docRef.update({ participants: newTeams, teamsGenerated: true });
+                alert("Takımlar başarıyla kuruldu! ✅");
+                openTournamentDetail(tourId, (await docRef.get()).data());
+            }
+        } catch(e) { alert("Takım kurma hatası: " + e.message); }
+    };
   
 }); // DOMContentLoaded SONU
