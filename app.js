@@ -1679,9 +1679,20 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
             const bracketSize = Math.pow(2, Math.ceil(Math.log2(totalAdvancing)));
             
             let placeholders = [];
-            for(let g=0; g<numGroups; g++) {
-                for(let r=1; r<=advancingCount; r++) { placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r }); }
+            // 1. Önce direkt çıkanları (Tüm 1.ler, sonra tüm 2.ler) sıraya diz ki adil eşleşsin
+            for(let r=1; r<=advancingCount; r++) {
+                for(let g=0; g<numGroups; g++) { 
+                    placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r }); 
+                }
             }
+            
+            // 2. BAY geçmek yerine, eksik koltuklara "En İyi Üçüncüler/Ekstralar" yerleştir
+            const missingSlots = bracketSize - totalAdvancing;
+            for(let i=1; i<=missingSlots; i++) {
+                placeholders.push({ isPlaceholder: true, isBestExtra: true, extraRank: i });
+            }
+            
+            // Güvenlik: Eğer hala boşluk kalırsa (matematiksel olarak) BAY ile doldur
             while(placeholders.length < bracketSize) { placeholders.push({ isBye: true }); }
 
             function getSeededOrder(size) {
@@ -3189,30 +3200,70 @@ window.adminAddParticipant = async function(tourId) {
             });
 
             // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI (Sırayla ve Garantili) GÜNCELLE ---
+            // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI VE EN İYİ 3.LERİ CANLI GÜNCELLE ---
             if (bracket.length > 0) {
                 const advCount = data.advancingCount || 2;
                 const topPlayers = group.players.slice(0, advCount);
                 
+                // Grupların tamamen bitip bitmediğini kontrol et (Maçları resmileştirmek için)
+                let allGroupsFinished = true;
+                data.groups.forEach(gr => gr.matches.forEach(mx => { if (!mx.winner && mx.score !== "Oynamadan Geçti" && mx.score !== "Bay Geçti") allGroupsFinished = false; }));
+
+                // 1. DİREKT ÇIKANLARI (1.ler, 2.ler) AĞACA YERLEŞTİR
                 for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
                     let m = bracket[0].matches[mIdx];
-                    
-                    // Veritabanı atlamalarını önlemek için klasik for döngüsü kullanıldı
                     for (let slotKey of ['p1', 'p2']) {
                         let slot = m[slotKey];
-                        if (slot && slot.isPlaceholder && slot.groupIdx === gIdx) {
+                        if (slot && slot.isPlaceholder && !slot.isBestExtra && slot.groupIdx === gIdx) {
                             const currentPlayer = topPlayers[slot.rank - 1];
                             if (currentPlayer) {
-                                if (slot.p1 !== currentPlayer.p1) {
-                                    m[slotKey] = { ...slot, ...currentPlayer }; 
+                                // Sadece en az 1 maç oynamış kişileri aday gösterelim (İlk gün boş kalmasın)
+                                if (currentPlayer.played > 0 && slot.p1 !== currentPlayer.p1) {
+                                    m[slotKey] = { ...slot, ...currentPlayer, isLiveCandidate: !allGroupsFinished }; 
                                     
-                                    if (m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
+                                    // EĞER tüm gruplar bittiyse ve iki koltuk da doluysa Çeyrek Final maçını resmen oluştur!
+                                    if (allGroupsFinished && m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye && !m.p1.isBestExtra && !m.p2.isBestExtra) {
                                         if (!m.firestoreMatchId) {
-                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`);
+                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
                                         } else {
-                                            await db.collection('matches').doc(m.firestoreMatchId).update({
-                                                oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null,
-                                                oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null
-                                            });
+                                            await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. EN İYİ 3.LERİ (EKSTRALARI) CANLI OLARAK HESAPLA VE AĞACA YERLEŞTİR
+                let extraPool = [];
+                data.groups.forEach(gr => {
+                    for(let i = advCount; i < gr.players.length; i++) { 
+                        if (gr.players[i].played > 0) extraPool.push(gr.players[i]); 
+                    }
+                });
+                
+                extraPool.sort((a, b) => {
+                    if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
+                    return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
+                });
+
+                for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                    let m = bracket[0].matches[mIdx];
+                    for (let slotKey of ['p1', 'p2']) {
+                        let slot = m[slotKey];
+                        if (slot && slot.isPlaceholder && slot.isBestExtra) {
+                            const bestExtraPlayer = extraPool[slot.extraRank - 1]; 
+                            if (bestExtraPlayer) {
+                                if (slot.p1 !== bestExtraPlayer.p1) {
+                                    m[slotKey] = { ...slot, ...bestExtraPlayer, isLiveCandidate: !allGroupsFinished };
+                                    
+                                    // EĞER tüm gruplar bittiyse ve iki koltuk da doluysa Çeyrek Final maçını resmen oluştur!
+                                    if (allGroupsFinished && m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
+                                        if (!m.firestoreMatchId) {
+                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
+                                        } else {
+                                            await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
                                         }
                                     }
                                 }
@@ -3562,17 +3613,27 @@ const getPlayerFullName = (p) => {
             if (!p) return '<span style="color:#ccc;">Bekleniyor</span>';
             if (p.isBye) return '<span style="color:#aaa;">- BAY -</span>';
             
-            // Eğer yer tutucuysa ve henüz ismi yoksa "Grup A 1." yazdır
+            // Eğer yer tutucuysa ve henüz ismi yoksa "Grup A 1." veya "En İyi 1. Üçüncü" yazdır
             if (p.isPlaceholder && !p.p1) {
+                if (p.isBestExtra) return `<span style="color:#007bff; font-weight:bold;">En İyi ${p.extraRank}. Üçüncü</span>`;
                 return `<span style="color:#c06035; font-weight:bold;">${p.groupName} Grubu ${p.rank}.</span>`;
             }
             
-            // İsmi varsa (veya yer tutucunun üzerine isim binmişse) tam ismi yazdır
             let name = userMap[p.p1]?.isim || 'Oyuncu'; 
             if (p.p2) name += ` & ${userMap[p.p2]?.isim || 'Oyuncu'}`; 
             
-            // Eğer hala yer tutucu aşamasındaysa başına ufak bir not ekleyebilirsin
-            if (p.isPlaceholder) name = `<small style="font-size:0.7em; color:#777;">(${p.groupName}${p.rank})</small> ` + name;
+            // Eğer yer tutucu koltuğunda oturuyorsa başına durumunu (Aday/Kesinleşti) ekle
+            if (p.isPlaceholder) {
+                if (p.isBestExtra && p.isLiveCandidate) {
+                    name = `<small style="font-size:0.7em; color:#007bff; font-weight:bold;">(Şu anki ${p.extraRank}. Aday)</small><br>` + name;
+                } else if (p.isLiveCandidate) {
+                    name = `<small style="font-size:0.7em; color:#c06035; font-weight:bold;">(Şu anki Aday)</small><br>` + name;
+                } else if (p.isBestExtra) {
+                    name = `<small style="font-size:0.7em; color:#28a745; font-weight:bold;">(Kesinleşti: ${p.extraRank}. Üçüncü)</small><br>` + name;
+                } else {
+                    name = `<small style="font-size:0.7em; color:#777; font-weight:bold;">(${p.groupName} Grubu ${p.rank}.)</small><br>` + name;
+                }
+            }
             
             return name;
         };
