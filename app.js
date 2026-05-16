@@ -3201,41 +3201,30 @@ window.adminAddParticipant = async function(tourId) {
 
             // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI (Sırayla ve Garantili) GÜNCELLE ---
             // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI VE EN İYİ 3.LERİ CANLI GÜNCELLE ---
+    // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI VE EN İYİ 3.LERİ CANLI GÜNCELLE ---
             if (bracket.length > 0) {
                 const advCount = data.advancingCount || 2;
                 const topPlayers = group.players.slice(0, advCount);
                 
-                // Grupların tamamen bitip bitmediğini kontrol et (Maçları resmileştirmek için)
+                // Grupların tamamen bitip bitmediğini kontrol et
                 let allGroupsFinished = true;
                 data.groups.forEach(gr => gr.matches.forEach(mx => { if (!mx.winner && mx.score !== "Oynamadan Geçti" && mx.score !== "Bay Geçti") allGroupsFinished = false; }));
 
-                // 1. DİREKT ÇIKANLARI (1.ler, 2.ler) AĞACA YERLEŞTİR
+                // 1. O AN BİTEN GRUBUN DİREKT ÇIKANLARINI AĞACA YERLEŞTİR
                 for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
                     let m = bracket[0].matches[mIdx];
                     for (let slotKey of ['p1', 'p2']) {
                         let slot = m[slotKey];
                         if (slot && slot.isPlaceholder && !slot.isBestExtra && slot.groupIdx === gIdx) {
                             const currentPlayer = topPlayers[slot.rank - 1];
-                            if (currentPlayer) {
-                                // Sadece en az 1 maç oynamış kişileri aday gösterelim (İlk gün boş kalmasın)
-                                if (currentPlayer.played > 0 && slot.p1 !== currentPlayer.p1) {
-                                    m[slotKey] = { ...slot, ...currentPlayer, isLiveCandidate: !allGroupsFinished }; 
-                                    
-                                    // EĞER tüm gruplar bittiyse ve iki koltuk da doluysa Çeyrek Final maçını resmen oluştur!
-                                    if (allGroupsFinished && m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye && !m.p1.isBestExtra && !m.p2.isBestExtra) {
-                                        if (!m.firestoreMatchId) {
-                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
-                                        } else {
-                                            await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
-                                        }
-                                    }
-                                }
+                            if (currentPlayer && currentPlayer.played > 0) {
+                                m[slotKey] = { ...slot, ...currentPlayer, isLiveCandidate: !allGroupsFinished }; 
                             }
                         }
                     }
                 }
 
-                // 2. EN İYİ 3.LERİ (EKSTRALARI) CANLI OLARAK HESAPLA VE AĞACA YERLEŞTİR
+                // 2. EN İYİ 3.LERİ (EKSTRALARI) HESAPLA VE AĞACA YERLEŞTİR
                 let extraPool = [];
                 data.groups.forEach(gr => {
                     for(let i = advCount; i < gr.players.length; i++) { 
@@ -3255,18 +3244,27 @@ window.adminAddParticipant = async function(tourId) {
                         if (slot && slot.isPlaceholder && slot.isBestExtra) {
                             const bestExtraPlayer = extraPool[slot.extraRank - 1]; 
                             if (bestExtraPlayer) {
-                                if (slot.p1 !== bestExtraPlayer.p1) {
-                                    m[slotKey] = { ...slot, ...bestExtraPlayer, isLiveCandidate: !allGroupsFinished };
-                                    
-                                    // EĞER tüm gruplar bittiyse ve iki koltuk da doluysa Çeyrek Final maçını resmen oluştur!
-                                    if (allGroupsFinished && m.p1.p1 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
-                                        if (!m.firestoreMatchId) {
-                                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
-                                        } else {
-                                            await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
-                                        }
-                                    }
-                                }
+                                m[slotKey] = { ...slot, ...bestExtraPlayer, isLiveCandidate: !allGroupsFinished };
+                            }
+                        }
+                    }
+                }
+
+                // 3. EĞER TÜM GRUPLAR BİTTİYSE, MAÇLARI RESMİLEŞTİR VE "(Aday)" ROZETİNİ KALDIR
+                if (allGroupsFinished) {
+                    for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                        let m = bracket[0].matches[mIdx];
+                        
+                        // Aday rozetlerini temizle
+                        if (m.p1 && m.p1.isLiveCandidate !== undefined) m.p1.isLiveCandidate = false;
+                        if (m.p2 && m.p2.isLiveCandidate !== undefined) m.p2.isLiveCandidate = false;
+
+                        // Her iki taraf da belliyse ve maç henüz oluşturulmadıysa oluştur
+                        if (m.p1 && m.p1.p1 && m.p2 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
+                            if (!m.firestoreMatchId) {
+                                m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
+                            } else {
+                                await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
                             }
                         }
                     }
