@@ -901,11 +901,18 @@
             <button id="btn-save-tour-score" class="btn-save" style="margin-top:15px;">Skoru Kaydet ve Tur Atlat 🚀</button>
         </div>
     </div>
+
+    <div id="lobby-detail-modal" class="modal" style="display: none; z-index: 2500;">
+        <div class="modal-content">
+            <span onclick="document.getElementById('lobby-detail-modal').style.display='none'" class="close-modal">&times;</span>
+            <div id="lobby-detail-content"></div>
+        </div>
+    </div>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=88"></script>
+    <script src="app.js?=90"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
@@ -915,7 +922,5 @@
             });
         }
     </script>
-
-
 </body>
 </html>
