@@ -1161,7 +1161,12 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         if(!targetUserId) targetUserId = auth.currentUser.uid; statFormBadges.innerHTML = '...';
         const user = userMap[targetUserId]; const stats = await calculateAdvancedStats(targetUserId);
 
-        statTotalMatch.textContent = stats.played; statTotalWin.textContent = stats.won; statTotalPointsDisplay.textContent = user ? user.toplamPuan : 0;
+        sstatTotalMatch.textContent = stats.played; statTotalWin.textContent = stats.won; 
+        statTotalPointsDisplay.textContent = user ? (user.toplamPuan || 0) : 0;
+        const statDoublesPointsDisplay = document.getElementById('stat-doubles-points');
+        if (statDoublesPointsDisplay) {
+            statDoublesPointsDisplay.textContent = user ? (user.ciftlerPuani !== undefined ? user.ciftlerPuani : 1000) : 1000;
+        }
         const winRate = stats.played > 0 ? Math.round((stats.won / stats.played) * 100) : 0; const setRate = stats.setsPlayed > 0 ? Math.round((stats.setsWon / stats.setsPlayed) * 100) : 0; const gameRate = stats.gamesPlayed > 0 ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0;
 
         updateCircleChart(chartWinRate, winRate); updateCircleChart(chartSetRate, setRate); updateCircleChart(chartGameRate, gameRate);
@@ -1183,7 +1188,12 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
 
         try {
             const u = userMap[userId]; if(!u) return;
-            statsPlayerName.textContent = u.isim || 'İsimsiz Oyuncu'; statsTotalPoints.textContent = u.toplamPuan || 0; 
+            statsPlayerName.textContent = u.isim || 'İsimsiz Oyuncu'; 
+            statsTotalPoints.textContent = u.toplamPuan || 0; 
+            const statsDoublesPoints = document.getElementById('stats-doubles-points');
+            if (statsDoublesPoints) {
+                statsDoublesPoints.textContent = u.ciftlerPuani !== undefined ? u.ciftlerPuani : 1000;
+            } 
             
             let infoText = "";
             if (u.kulup && u.kulup !== 'Belirtilmemiş') { infoText += `🏟️ ${u.kulup}`; }

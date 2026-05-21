@@ -520,10 +520,16 @@
 
             <div id="stats-content-area">
                 <div class="modern-stat-card" style="display: flex; gap: 10px; justify-content: space-around; padding: 15px;">
+                   <div style="text-align:center;">
+                        <div style="font-size:1.8em;">👤</div>
+                        <div id="stat-total-points" style="font-size:1.4em; font-weight:800; color:#e65100;">0</div>
+                        <div style="font-size:0.75em; color:#777; font-weight:600;">TEKLER P.</div>
+                    </div>
+                    <div style="width:1px; background:#eee;"></div>
                     <div style="text-align:center;">
-                        <div style="font-size:1.8em;">🎾</div>
-                        <div id="stat-total-match" style="font-size:1.4em; font-weight:800; color:#333;">0</div>
-                        <div style="font-size:0.75em; color:#777; font-weight:600;">MAÇ</div>
+                        <div style="font-size:1.8em;">👥</div>
+                        <div id="stat-doubles-points" style="font-size:1.4em; font-weight:800; color:#6f42c1;">0</div>
+                        <div style="font-size:0.75em; color:#777; font-weight:600;">ÇİFTLER P.</div>
                     </div>
                     <div style="width:1px; background:#eee;"></div>
                     <div style="text-align:center;">
@@ -741,9 +747,10 @@
                 <div class="modal-header-center">
                     <img id="stats-player-photo" src="" class="modal-photo">
                     <h3 id="stats-player-name" style="margin-bottom: 5px;"></h3>
-                    <div style="font-size:0.9em; color:#666; margin-bottom:10px;">
-                        <span id="stats-total-points" style="font-weight:bold; color:#28a745;"></span> Puan • 
-                        <span id="stats-court-pref"></span>
+                  <div style="font-size:0.9em; color:#666; margin-bottom:10px;">
+                        👤 <span id="stats-total-points" style="font-weight:bold; color:#e65100;"></span> &nbsp;|&nbsp; 
+                        👥 <span id="stats-doubles-points" style="font-weight:bold; color:#6f42c1;"></span> <br>
+                        <span id="stats-court-pref" style="display:inline-block; margin-top:5px;"></span>
                     </div>
                     <button id="start-chat-btn" class="btn-chat" style="margin: 0 auto 10px auto;">Mesaj Gönder 💬</button>
                 </div>
@@ -912,7 +919,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=91"></script>
+    <script src="app.js?=92"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
