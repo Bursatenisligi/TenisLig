@@ -1091,7 +1091,12 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
             }
         });
         
-        allMatches.sort((a, b) => { const tA = a.tarih ? a.tarih.seconds : 0; const tB = b.tarih ? b.tarih.seconds : 0; return tB - tA; });
+        allMatches.sort((a, b) => { 
+    // Önce skor girilme tarihi, yoksa maç planı tarihi, o da yoksa oluşturulma tarihine göre en günceli bulur
+    const tA = a.skorTarihi ? a.skorTarihi.seconds : (a.macZamani ? a.macZamani.seconds : (a.tarih ? a.tarih.seconds : 0)); 
+    const tB = b.skorTarihi ? b.skorTarihi.seconds : (b.macZamani ? b.macZamani.seconds : (b.tarih ? b.tarih.seconds : 0)); 
+    return tB - tA; 
+});
 
         let stats = { played: 0, won: 0, setsPlayed: 0, setsWon: 0, gamesPlayed: 0, gamesWon: 0, clay: { played: 0, won: 0 }, hard: { played: 0, won: 0 }, form: [] };
 
@@ -1203,16 +1208,52 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
             document.getElementById('pie-set-chart').style.setProperty('--p', setRate); document.getElementById('text-set-rate').textContent = `%${setRate}`;
             document.getElementById('pie-game-chart').style.setProperty('--p', gameRate); document.getElementById('text-game-rate').textContent = `%${gameRate}`;
             
-            const h2hBox = document.getElementById('stats-h2h-box');
+  const h2hBox = document.getElementById('stats-h2h-box');
             if (userId !== auth.currentUser.uid) {
                 h2hBox.style.display = 'block'; h2hBox.innerHTML = 'Aramızdaki Maçlar Yükleniyor...';
                 const myId = auth.currentUser.uid;
-                const q1 = db.collection('matches').where('oyuncu1ID', '==', myId).where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-                const q2 = db.collection('matches').where('oyuncu1ID', '==', userId).where('oyuncu2ID', '==', myId).where('durum', '==', 'Tamamlandı').get();
-                Promise.all([q1, q2]).then(([s1, s2]) => {
-                    let myWins = 0, oppWins = 0; const proc = (d) => { if(d.data().kayitliKazananID === myId) myWins++; else oppWins++; }; s1.forEach(proc); s2.forEach(proc);
+                
+                // --- YENİ H2H (ARAMIZDAKİ MAÇLAR) HESAPLAMASI ---
+                // Tüm maçları çekip çiftler/partner durumlarını lokal olarak güvenle ayırıyoruz
+                db.collection('matches').where('durum', '==', 'Tamamlandı').get().then(snap => {
+                    let myWins = 0, oppWins = 0;
+                    snap.forEach(doc => {
+                        const m = doc.data();
+                        // Maçtaki tüm oyuncuların (partnerler dahil) ID'lerini topla
+                        const players = [m.oyuncu1ID, m.oyuncu2ID, m.oyuncu1PartnerID, m.oyuncu2PartnerID].filter(Boolean);
+                        
+                        // Eğer ikimiz de bu maçtaysak (İster kaptan ister partner olalım)
+                        if (players.includes(myId) && players.includes(userId)) {
+                            
+                            // Takımları ayır
+                            const team1 = [m.oyuncu1ID, m.oyuncu1PartnerID].filter(Boolean);
+                            const team2 = [m.oyuncu2ID, m.oyuncu2PartnerID].filter(Boolean);
+                            
+                            const iAmTeam1 = team1.includes(myId);
+                            const oppIsTeam1 = team1.includes(userId);
+                            
+                            // Sadece "Farklı takımlardaysak" (Rakipsek) hesaba kat. Aynı takımda partnersek H2H sayılmaz.
+                            if (iAmTeam1 !== oppIsTeam1) {
+                                let isMyTeamWinner = false;
+                                let isOppTeamWinner = false;
+                                
+                                if (m.kayitliKazananID) {
+                                    if (team1.includes(m.kayitliKazananID)) {
+                                        if (iAmTeam1) isMyTeamWinner = true; else isOppTeamWinner = true;
+                                    } else if (team2.includes(m.kayitliKazananID)) {
+                                        if (!iAmTeam1) isMyTeamWinner = true; else isOppTeamWinner = true;
+                                    }
+                                }
+                                
+                                if (isMyTeamWinner) myWins++;
+                                else if (isOppTeamWinner) oppWins++;
+                            }
+                        }
+                    });
                     h2hBox.innerHTML = `🆚 Aramızdaki Maçlar: <span style="color:#28a745">Sen ${myWins}</span> - <span style="color:#dc3545">${oppWins} Rakip</span>`;
                 });
+                // ------------------------------------------------
+                
             } else { h2hBox.style.display = 'none'; }
 
             const formContainer = document.getElementById('stats-form-badges'); formContainer.innerHTML = '';
