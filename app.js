@@ -4491,8 +4491,8 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
     // 1. Senin Green-API Bilgilerin (Buraları paneldeki bilgilerle doldur)
     const WA_API_URL = "https://7107.api.greenapi.com"; 
     const WA_INSTANCE_ID = "7107628348";                
-    const WA_API_TOKEN = "905304008164@c.us"; 
-    const WA_GROUP_ID = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_GROUP_ID = "905304008164@c.us"; 
 
     // 2. Gruba gidecek dikkat çekici turnuva resmi (Unsplash üzerinden yüksek kaliteli tenis kupası resmi)
     const strikingImage = "https://images.unsplash.com/photo-1617083934555-ac7d4feeeddf?q=80&w=1080&auto=format&fit=crop";
