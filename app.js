@@ -4487,18 +4487,20 @@ const getPlayerFullName = (p) => {
 
 
    
-// --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (KİŞİSEL SOHBET UYUMLU) ---
-// --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (GELMİŞ GEÇMİŞ EN DETAYLI RAPORLAYICI) ---
+/// --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (BULLETPREOF SÜRÜM) ---
 async function sendWhatsAppTournamentNotification(tournamentName, tournamentFormat, tournamentFee) {
     const WA_API_URL = "https://7107.api.greenapi.com"; 
     const WA_INSTANCE_ID = "7107628348";                
     const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
-    const WA_RECIPIENT_CHAT_ID = "905304008164@c.us"; 
 
-    // Dikkat çekici turnuva resmi
-    const strikingImage = "https://images.unsplash.com/photo-1617083934555-ac7d4feeeddf?q=80&w=1080&auto=format&fit=crop";
+    // CRITICAL: Kendi numaran yerine testi görmek için geçici olarak BAŞKA bir WhatsApp numarası yaz!
+    // Örn: "90532XXXXXXX@c.us"
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
 
-    // WhatsApp Sohbetine düşecek havalı ve emojili metin tasarımı
+    // Sonu direkt .jpg ile biten, sunucunun saniyede indirebileceği tertemiz bir tenis kupası görseli
+    const strikingImage = "https://images.unsplash.com/photo-1542144557-f550eeed3b0c.jpg";
+
+    // WhatsApp Sohbetine düşecek metin tasarımı
     const messageText = 
         `🏆 *YENİ TURNUVA ALARMI!* 🏆\n\n` +
         `🎾 Kortlarda heyecan yeniden zirveye tırmanıyor! Ligimizde yeni bir resmi turnuva kayda açılmıştır.\n\n` +
@@ -4524,15 +4526,12 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
             body: JSON.stringify(requestData)
         });
 
-        // Sunucunun döndüğü ham veriyi okuyoruz
         const result = await response.json();
 
         if (response.ok) {
-            // Eğer her şey gerçekten yolundaysa Green-API bize benzersiz bir mesaj ID'si üretir
             console.log("Green-API Sunucu Yanıtı (Mesaj ID):", result.idMessage);
-            console.log("WhatsApp görseli ve turnuva duyurusu şahsi sohbete başarıyla gönderildi! 🚀");
+            console.log("WhatsApp görseli ve turnuva duyurusu başarıyla gönderildi! 🚀");
         } else {
-            // Sunucu isteği reddettiyse kırmızı bir hata basacak ve sebebini söyleyecek
             console.error("🛑 Green-API İsteği Reddetti! Detay:", result);
         }
     } catch (error) {
