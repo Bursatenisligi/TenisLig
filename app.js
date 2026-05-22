@@ -2130,7 +2130,7 @@ function showNotification(msg, type='info') {
                 alert("Turnuva başarıyla oluşturuldu! 🏆");
 
                 // [YENİ EKLEDİĞİMİZ SATIR] WhatsApp Grubuna resmi ve detayları uçurur
-                sendWhatsAppTournamentNotification(name, format, fee);
+                window.sendWhatsAppTournamentNotification(name, format, fee);
 
                 createTournamentForm.style.display = 'none';
                 tournamentListView.style.display = 'block';
@@ -4208,7 +4208,7 @@ window.generateAutoTeams = async function(tourId) {
             alert("Müthiş! Mix takımları OYUN KAZANMA YÜZDELERİ gözetilerek dengeli bir şekilde kuruldu! ✅");
             
             // [WHATSAPP TETİKLEYİCİSİ] Gruba listeyi tam isimlerle fırlatır
-            sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
+            window.sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
             
             openTournamentDetail(tourId, (await docRef.get()).data());
             
@@ -4246,7 +4246,7 @@ window.generateAutoTeams = async function(tourId) {
             alert("Takımlar OYUN KAZANMA YÜZDELERİNE göre başarıyla kuruldu! ✅");
             
             // [WHATSAPP TETİKLEYİCİSİ] Gruba listeyi tam isimlerle fırlatır
-            sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
+            window.sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
             
             openTournamentDetail(tourId, (await docRef.get()).data());
         }
@@ -4498,56 +4498,70 @@ window.generateAutoTeams = async function(tourId) {
 
 
    
-// --- GREEN-API OTOMATİK TAKIM LİSTESİ DUYURU MOTORU (TAM İSİM UYUMLU) ---
-async function sendWhatsAppTeamsGeneratedNotification(tournamentName, teams) {
-    const WA_API_URL = "https://7107.api.greenapi.com"; 
-    const WA_INSTANCE_ID = "7107628348";                
-    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
-    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+// ============================================================================
+    // ==================== KÜRESEL GREEN-API BİLDİRİM MOTORLARI ==================
+    // ============================================================================
 
-    let teamsListText = "";
-    
-    // Tüm takımları tek tek dönüp listeye ekliyoruz
-    teams.forEach((team, index) => {
-        // .split(' ')[0] KULLANMAYARAK oyuncuların isim ve soyisimlerini tam haliyle çekiyoruz
-        const p1FullName = userMap[team.p1]?.isim || 'Bilinmeyen Oyuncu';
-        const p2FullName = team.p2 ? (userMap[team.p2]?.isim || 'Bilinmeyen Oyuncu') : 'Yok';
-        const powerMetric = team.points ? `%${team.points}` : 'Belirsiz';
-        
-        // WhatsApp formatında numara emojisi ve kalın yazılmış tam isimler
-        teamsListText += `${index + 1}️⃣ *${p1FullName}* & *${p2FullName}* (_Takım Gücü: ${powerMetric}_)\n`;
-    });
+    // --- 1. YENİ TURNUVA AÇILDIĞINDA GRUBA MESAJ ATAN MOTOR ---
+    window.sendWhatsAppTournamentNotification = async function(tournamentName, tournamentFormat, tournamentFee) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
 
-    // Gruba gidecek ana mesaj şablonu
-    const messageText = 
-        `🤝 *SİSTEM TAKIMLARI KURULDU!* 🤝\n\n` +
-        `🏆 *${tournamentName}* turnuvası için otomatik eşleşmeler ve kura aşaması başarıyla tamamlanmıştır.\n\n` +
-        `Algoritma tarafından oyuncu performanslarına göre kurulan dengeli takımlarımız şu şekildedir:\n\n` +
-        teamsListText + `\n` +
-        `🎯 Tüm takımlarımıza ve oyuncularımıza yürekten başarılar dileriz! \n` +
-        `👉 _Haftalık lig fikstürü, maç saatleri ve kort detayları için hemen uygulamaya giriş yapabilirsiniz._ 🎾`;
+        const messageText = 
+            `🏆 *YENİ TURNUVA ALARMI!* 🏆\n\n` +
+            `🎾 Kortlarda heyecan yeniden zirveye tırmanıyor! Ligimizde yeni bir resmi turnuva kayda açılmıştır.\n\n` +
+            `🌟 *Turnuva Adı:* ${tournamentName}\n` +
+            `⚔️ *Format:* ${tournamentFormat}\n` +
+            `💰 *Giriş Ücreti:* ${tournamentFee} Puan\n\n` +
+            `🎯 *Hemen uygulamaya gir, profilinden kaydını tamamla ve rakiplerine meydan oku!* \n` +
+            `👉 _Unutma, son kayıt tarihinden önce yerini ayırtmalısın!_`;
 
-    const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`;
-    
-    const requestData = {
-        chatId: WA_RECIPIENT_CHAT_ID,
-        message: messageText
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Turnuva duyurusu WhatsApp grubuna fırlatıldı! 🚀");
+        } catch (error) { console.error("💥 Turnuva duyurusu atılırken ağ hatası:", error); }
     };
 
-    try {
-        const response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestData)
+    // --- 2. SİSTEM TAKIMLARI KURULDUĞUNDA TAM İSİMLE LİSTE ATAN MOTOR ---
+    window.sendWhatsAppTeamsGeneratedNotification = async function(tournamentName, teams) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        let teamsListText = "";
+        
+        teams.forEach((team, index) => {
+            // İsim ve soyismin tam halini korumak için split metotlarını kullanmıyoruz
+            const p1FullName = userMap[team.p1]?.isim || 'Bilinmeyen Oyuncu';
+            const p2FullName = team.p2 ? (userMap[team.p2]?.isim || 'Bilinmeyen Oyuncu') : 'Yok';
+            const powerMetric = team.points ? `%${team.points}` : 'Belirsiz';
+            
+            teamsListText += `${index + 1}️⃣ *${p1FullName}* & *${p2FullName}* (_Takım Gücü: ${powerMetric}_)\n`;
         });
-        if (response.ok) {
-            console.log("Takım listesi WhatsApp grubuna başarıyla uçuruldu! 🚀");
-        } else {
-            console.error("Takım listesi sunucu tarafından reddedildi.");
-        }
-    } catch (error) {
-        console.error("WhatsApp takım duyurusu atılırken ağ hatası:", error);
-    }
-}
+
+        const messageText = 
+            `🤝 *SİSTEM TAKIMLARI KURULDU!* 🤝\n\n` +
+            `🏆 *${tournamentName}* turnuvası için otomatik eşleşmeler ve kura aşaması başarıyla tamamlanmıştır.\n\n` +
+            `Algoritma tarafından oyuncu performanslarına göre kurulan dengeli takımlarımız şu şekildedir:\n\n` +
+            teamsListText + `\n` +
+            `🎯 Tüm takımlarımıza ve oyuncularımıza yürekten başarılar dileriz! \n` +
+            `👉 _Haftalık lig fikstürü, maç saatleri ve kort detayları için hemen uygulamaya giriş yapabilirsiniz._ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Takım listesi WhatsApp grubuna başarıyla uçuruldu! 🚀");
+        } catch (error) { console.error("💥 WhatsApp takım duyurusu atılırken ağ hatası:", error); }
+    };
   
 }); // DOMContentLoaded SONU
