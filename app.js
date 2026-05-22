@@ -4493,7 +4493,7 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
     const WA_INSTANCE_ID = "7107628348";                
     
     // 1. ADIM: Buraya Green-API panelindeki göz (👁️) butonuna basınca çıkan UPUZUN gizli şifreyi yapıştır!
-    const WA_API_TOKEN = "BURAYA_PANELDEKİ_UPUZUN_apiTokenInstance_ŞİFRESİ_GELECEK"; 
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
     
     // 2. ADIM: Mesajın gitmesini istediğin telefon numarasını başına ülke kodu (90) koyarak ve sonuna @c.us ekleyerek yaz.
     // Örn: "905304008164@c.us" (Eğer ilk testi kendine atacaksan kendi numaranı yazabilirsin)
