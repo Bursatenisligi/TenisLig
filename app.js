@@ -4126,121 +4126,132 @@ const getPlayerFullName = (p) => {
 // --- YENİ: OTOMATİK DENK/KURA TAKIM KURMA ALGORİTMASI ---
 // --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
 // --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
-    window.generateAutoTeams = async function(tourId) {
-        try {
-            const docRef = db.collection('tournaments').doc(tourId);
-            const data = (await docRef.get()).data();
-            let players = data.participants || [];
+// --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA VE WHATSAPP ENTEGRELİ MOTOR ---
+window.generateAutoTeams = async function(tourId) {
+    try {
+        const docRef = db.collection('tournaments').doc(tourId);
+        const data = (await docRef.get()).data();
+        let players = data.participants || [];
+        
+        // 1. GERÇEK GÜCÜ BUL (Tüm maçlardan Oyun Kazanma Yüzdesini Hesapla)
+        const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+        let gameStats = {}; 
+        matchesSnap.forEach(doc => {
+            const m = doc.data();
+            if(!m.skor || !m.kayitliKazananID) return;
             
-            // 1. GERÇEK GÜCÜ BUL (Tüm maçlardan Oyun Kazanma Yüzdesini Hesapla)
-            const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
-            let gameStats = {}; 
-            matchesSnap.forEach(doc => {
-                const m = doc.data();
-                if(!m.skor || !m.kayitliKazananID) return;
-                
-                const wid = m.kayitliKazananID;
-                const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
-                let wP = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
-                let lP = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
+            const wid = m.kayitliKazananID;
+            const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+            let wP = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+            let lP = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
 
-                const uids = [wid, lid]; if(wP) uids.push(wP); if(lP) uids.push(lP);
-                uids.forEach(u => { if(u && !gameStats[u]) gameStats[u] = { w: 0, p: 0 }; });
+            const uids = [wid, lid]; if(wP) uids.push(wP); if(lP) uids.push(lP);
+            uids.forEach(u => { if(u && !gameStats[u]) gameStats[u] = { w: 0, p: 0 }; });
 
-                const s = m.skor;
-                const sets = [{ w: s.s1_me, l: s.s1_opp, tb: false }, { w: s.s2_me, l: s.s2_opp, tb: false }, { w: s.s3_me, l: s.s3_opp, tb: true }];
-                
-                let isEntryByWinner = m.sonucuGirenID === wid;
-                if (m.macTipi === 'Turnuva') isEntryByWinner = (m.oyuncu1ID === wid);
-                
-                sets.forEach(set => { 
-                    if (set.tb) return; // Tie-Break oyundan sayılmaz
-                    let b1 = parseInt(set.w || 0); let b2 = parseInt(set.l || 0); 
-                    if(b1 + b2 > 0) { 
-                        let winG = isEntryByWinner ? b1 : b2; let losG = isEntryByWinner ? b2 : b1;
-                        if(wid) { gameStats[wid].w += winG; gameStats[wid].p += (winG + losG); }
-                        if(wP) { gameStats[wP].w += winG; gameStats[wP].p += (winG + losG); }
-                        if(lid) { gameStats[lid].w += losG; gameStats[lid].p += (winG + losG); }
-                        if(lP) { gameStats[lP].w += losG; gameStats[lP].p += (winG + losG); }
-                    } 
-                });
+            const s = m.skor;
+            const sets = [{ w: s.s1_me, l: s.s1_opp, tb: false }, { w: s.s2_me, l: s.s2_opp, tb: false }, { w: s.s3_me, l: s.s3_opp, tb: true }];
+            
+            let isEntryByWinner = m.sonucuGirenID === wid;
+            if (m.macTipi === 'Turnuva') isEntryByWinner = (m.oyuncu1ID === wid);
+            
+            sets.forEach(set => { 
+                if (set.tb) return; 
+                let b1 = parseInt(set.w || 0); let b2 = parseInt(set.l || 0); 
+                if(b1 + b2 > 0) { 
+                    let winG = isEntryByWinner ? b1 : b2; let losG = isEntryByWinner ? b2 : b1;
+                    if(wid) { gameStats[wid].w += winG; gameStats[wid].p += (winG + losG); }
+                    if(wP) { gameStats[wP].w += winG; gameStats[wP].p += (winG + losG); }
+                    if(lid) { gameStats[lid].w += losG; gameStats[lid].p += (winG + losG); }
+                    if(lP) { gameStats[lP].w += losG; gameStats[lP].p += (winG + losG); }
+                } 
             });
+        });
 
-            // 2. TAKIMLARI KUR
-            if (data.format === 'Mix') {
-                let males = []; let females = [];
-                for (let p of players) {
-                    const u = userMap[p.p1];
-                    let rate = 0;
-                    
-                    // SİHİRLİ DOKUNUŞ: EĞER OYUNCUNUN HİÇ MAÇI YOKSA ORGANİZATÖRE SOR!
-                    if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
-                        if (data.autoType === 'balanced') {
-                            let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
-                            rate = parseFloat(val);
-                            if(isNaN(rate)) rate = 0;
-                        }
-                    } else {
-                        rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
+        // 2. TAKIMLARI KUR
+        if (data.format === 'Mix') {
+            let males = []; let females = [];
+            for (let p of players) {
+                const u = userMap[p.p1];
+                let rate = 0;
+                
+                if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
+                    if (data.autoType === 'balanced') {
+                        let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
+                        rate = parseFloat(val);
+                        if(isNaN(rate)) rate = 0;
                     }
-                    
-                    if(u.cinsiyet === 'Kadın') females.push({uid: p.p1, rate: rate});
-                    else males.push({uid: p.p1, rate: rate});
-                }
-                
-                if (males.length !== females.length) return alert(`🚨 Mix turnuvası için Kadın ve Erkek sayıları EŞİT olmalıdır! \nMevcut Kayıt: ${males.length} Erkek, ${females.length} Kadın.`);
-                
-                if (data.autoType === 'balanced') {
-                    males.sort((a,b) => b.rate - a.rate); // Erkekler Büyükten Küçüğe
-                    females.sort((a,b) => a.rate - b.rate); // Kadınlar Küçükten Büyüğe
                 } else {
-                    males.sort(() => 0.5 - Math.random()); females.sort(() => 0.5 - Math.random());
+                    rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
                 }
                 
-                let newTeams = [];
-                for(let i=0; i<males.length; i++) {
-                    const avgRate = ((males[i].rate + females[i].rate) / 2).toFixed(1);
-                    newTeams.push({ p1: males[i].uid, p2: females[i].uid, points: avgRate }); 
-                }
-                await docRef.update({ participants: newTeams, teamsGenerated: true });
-                alert("Müthiş! Mix takımları OYUN KAZANMA YÜZDELERİ gözetilerek dengeli bir şekilde kuruldu! ✅");
-                openTournamentDetail(tourId, (await docRef.get()).data());
-                
-            } else { // Double Erkek veya Double Kadın
-                if (players.length % 2 !== 0) return alert(`🚨 Eşleşme için toplam oyuncu sayısı ÇİFT olmalıdır! (Mevcut: ${players.length})`);
-                
-                let all = [];
-                for (let p of players) {
-                    const u = userMap[p.p1];
-                    let rate = 0;
-                    
-                    // SİHİRLİ DOKUNUŞ: EĞER OYUNCUNUN HİÇ MAÇI YOKSA ORGANİZATÖRE SOR!
-                    if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
-                        if (data.autoType === 'balanced') {
-                            let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
-                            rate = parseFloat(val);
-                            if(isNaN(rate)) rate = 0;
-                        }
-                    } else {
-                        rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
-                    }
-                    all.push({uid: p.p1, rate: rate});
-                }
-
-                if (data.autoType === 'balanced') { all.sort((a,b) => b.rate - a.rate); } 
-                else { all.sort(() => 0.5 - Math.random()); }
-                
-                let newTeams = [];
-                for(let i=0; i<all.length/2; i++) {
-                    const avgRate = ((all[i].rate + all[all.length - 1 - i].rate) / 2).toFixed(1);
-                    newTeams.push({ p1: all[i].uid, p2: all[all.length - 1 - i].uid, points: avgRate });
-                }
-                await docRef.update({ participants: newTeams, teamsGenerated: true });
-                alert("Takımlar OYUN KAZANMA YÜZDELERİNE göre başarıyla kuruldu! ✅");
-                openTournamentDetail(tourId, (await docRef.get()).data());
+                if(u.cinsiyet === 'Kadın') females.push({uid: p.p1, rate: rate});
+                else males.push({uid: p.p1, rate: rate});
             }
-        } catch(e) { alert("Takım kurma hatası: " + e.message); }
-    };
+            
+            if (males.length !== females.length) return alert(`🚨 Mix turnuvası için Kadın ve Erkek sayıları EŞİT olmalıdır! \nMevcut Kayıt: ${males.length} Erkek, ${females.length} Kadın.`);
+            
+            if (data.autoType === 'balanced') {
+                males.sort((a,b) => b.rate - a.rate); 
+                females.sort((a,b) => a.rate - b.rate); 
+            } else {
+                males.sort(() => 0.5 - Math.random()); females.sort(() => 0.5 - Math.random());
+            }
+            
+            let newTeams = [];
+            for(let i=0; i<males.length; i++) {
+                const avgRate = ((males[i].rate + females[i].rate) / 2).toFixed(1);
+                newTeams.push({ p1: males[i].uid, p2: females[i].uid, points: avgRate }); 
+            }
+            
+            // Veritabanını güncelle
+            await docRef.update({ participants: newTeams, teamsGenerated: true });
+            alert("Müthiş! Mix takımları OYUN KAZANMA YÜZDELERİ gözetilerek dengeli bir şekilde kuruldu! ✅");
+            
+            // [WHATSAPP TETİKLEYİCİSİ] Gruba listeyi tam isimlerle fırlatır
+            sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
+            
+            openTournamentDetail(tourId, (await docRef.get()).data());
+            
+        } else { // Double Erkek veya Double Kadın
+            if (players.length % 2 !== 0) return alert(`🚨 Eşleşme için toplam oyuncu sayısı ÇİFT olmalıdır! (Mevcut: ${players.length})`);
+            
+            let all = [];
+            for (let p of players) {
+                const u = userMap[p.p1];
+                let rate = 0;
+                
+                if (!gameStats[p.p1] || gameStats[p.p1].p === 0) {
+                    if (data.autoType === 'balanced') {
+                        let val = prompt(`🚨 DİKKAT: ${u.isim || 'Bilinmeyen'} isimli oyuncunun sistemde hiç maçı yok!\n\nDenk takımlar kurabilmek için lütfen bu oyuncuya tahmini bir Oyun Kazanma Yüzdesi (%) girin:\n(Örn: Ortalama bir oyuncu için 40-50 arası bir değer)`);
+                        rate = parseFloat(val);
+                        if(isNaN(rate)) rate = 0;
+                    }
+                } else {
+                    rate = (gameStats[p.p1].w / gameStats[p.p1].p) * 100;
+                }
+                all.push({uid: p.p1, rate: rate});
+            }
+
+            if (data.autoType === 'balanced') { all.sort((a,b) => b.rate - a.rate); } 
+            else { all.sort(() => 0.5 - Math.random()); }
+            
+            let newTeams = [];
+            for(let i=0; i<all.length/2; i++) {
+                const avgRate = ((all[i].rate + all[all.length - 1 - i].rate) / 2).toFixed(1);
+                newTeams.push({ p1: all[i].uid, p2: all[all.length - 1 - i].uid, points: avgRate });
+            }
+            
+            // Veritabanını güncelle
+            await docRef.update({ participants: newTeams, teamsGenerated: true });
+            alert("Takımlar OYUN KAZANMA YÜZDELERİNE göre başarıyla kuruldu! ✅");
+            
+            // [WHATSAPP TETİKLEYİCİSİ] Gruba listeyi tam isimlerle fırlatır
+            sendWhatsAppTeamsGeneratedNotification(data.name, newTeams);
+            
+            openTournamentDetail(tourId, (await docRef.get()).data());
+        }
+    } catch(e) { alert("Takım kurma hatası: " + e.message); }
+};
 
 /// --- 2. KATILIMCI LİSTESİ VE KAYIT ALANI ---
     async function renderRegistrationArea(tourId, tourData, myUid) {
@@ -4487,26 +4498,35 @@ const getPlayerFullName = (p) => {
 
 
    
-// --- GREEN-API SADECE YAZI ODAKLI DUYURU MOTORU ---
-async function sendWhatsAppTournamentNotification(tournamentName, tournamentFormat, tournamentFee) {
+// --- GREEN-API OTOMATİK TAKIM LİSTESİ DUYURU MOTORU (TAM İSİM UYUMLU) ---
+async function sendWhatsAppTeamsGeneratedNotification(tournamentName, teams) {
     const WA_API_URL = "https://7107.api.greenapi.com"; 
     const WA_INSTANCE_ID = "7107628348";                
     const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+    let teamsListText = "";
     
-    // TEST İÇİN: Kendi numaranız yerine lütfen evdeki başka birinin WhatsApp numarasını yazın!
-    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+    // Tüm takımları tek tek dönüp listeye ekliyoruz
+    teams.forEach((team, index) => {
+        // .split(' ')[0] KULLANMAYARAK oyuncuların isim ve soyisimlerini tam haliyle çekiyoruz
+        const p1FullName = userMap[team.p1]?.isim || 'Bilinmeyen Oyuncu';
+        const p2FullName = team.p2 ? (userMap[team.p2]?.isim || 'Bilinmeyen Oyuncu') : 'Yok';
+        const powerMetric = team.points ? `%${team.points}` : 'Belirsiz';
+        
+        // WhatsApp formatında numara emojisi ve kalın yazılmış tam isimler
+        teamsListText += `${index + 1}️⃣ *${p1FullName}* & *${p2FullName}* (_Takım Gücü: ${powerMetric}_)\n`;
+    });
 
-    // WhatsApp Sohbetine düşecek kalın harfli ve emojili duyuru metni
+    // Gruba gidecek ana mesaj şablonu
     const messageText = 
-        `🏆 *YENİ TURNUVA ALARMI!* 🏆\n\n` +
-        `🎾 Kortlarda heyecan yeniden zirveye tırmanıyor! Ligimizde yeni bir resmi turnuva kayda açılmıştır.\n\n` +
-        `🌟 *Turnuva Adı:* ${tournamentName}\n` +
-        `⚔️ *Format:* ${tournamentFormat}\n` +
-        `💰 *Giriş Ücreti:* ${tournamentFee} Puan\n\n` +
-        `🎯 *Hemen uygulamaya gir, profilinden kaydını tamamla ve rakiplerine meydan oku!* \n` +
-        `👉 _Unutma, son kayıt tarihinden önce yerini ayırtmalısın!_`;
+        `🤝 *SİSTEM TAKIMLARI KURULDU!* 🤝\n\n` +
+        `🏆 *${tournamentName}* turnuvası için otomatik eşleşmeler ve kura aşaması başarıyla tamamlanmıştır.\n\n` +
+        `Algoritma tarafından oyuncu performanslarına göre kurulan dengeli takımlarımız şu şekildedir:\n\n` +
+        teamsListText + `\n` +
+        `🎯 Tüm takımlarımıza ve oyuncularımıza yürekten başarılar dileriz! \n` +
+        `👉 _Haftalık lig fikstürü, maç saatleri ve kort detayları için hemen uygulamaya giriş yapabilirsiniz._ 🎾`;
 
-    // RESİM OLMADAN, DİREKT METİN GÖNDERMEK İÇİN EN NOKTA: sendMessage
     const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`;
     
     const requestData = {
@@ -4520,17 +4540,13 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestData)
         });
-
-        const result = await response.json();
-
         if (response.ok) {
-            console.log("Green-API Sunucu Yanıtı (Yazı ID):", result.idMessage);
-            console.log("Metin duyurusu şahsi sohbete başarıyla gönderildi! 🚀");
+            console.log("Takım listesi WhatsApp grubuna başarıyla uçuruldu! 🚀");
         } else {
-            console.error("🛑 Green-API İsteği Reddetti! Detay:", result);
+            console.error("Takım listesi sunucu tarafından reddedildi.");
         }
     } catch (error) {
-        console.error("💥 Ağ Hatası:", error);
+        console.error("WhatsApp takım duyurusu atılırken ağ hatası:", error);
     }
 }
   
