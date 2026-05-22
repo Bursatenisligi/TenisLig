@@ -3341,6 +3341,9 @@ window.adminAddParticipant = async function(tourId) {
             }
 
             await tourRef.update({ groups: groups, bracket: bracket });
+            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+            }
 
             const subject = "📊 Grubunda Yeni Maç Sonucu!";
             const body = `<p><strong>${data.name}</strong> turnuvasında, bulunduğun <strong>${group.groupName}</strong> grubunda yeni bir maç sonuçlandı.</p><p>Puan durumu güncellendi. Sıralamanı kontrol etmek için uygulamaya gir!</p>`;
@@ -3366,6 +3369,9 @@ window.adminAddParticipant = async function(tourId) {
             if (mData && mData.skor) mObj.rawScore = mData.skor;
 
             await tourRef.update({ bracket: bracket });
+            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+            }
             
             const subject = "📊 Ligde Yeni Maç Sonucu!";
             const body = `<p><strong>${data.name}</strong> liginde yeni bir maç sonuçlandı.</p><p>Güncel puan durumunu incelemek için uygulamaya göz at!</p>`;
@@ -3403,6 +3409,9 @@ window.adminAddParticipant = async function(tourId) {
                 data.status = 'Bitti'; 
             }
             await tourRef.update({ bracket: bracket, status: data.status });
+            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+            }
 
             const currentRoundMatches = bracket[rIdx].matches;
             const isRoundFinished = currentRoundMatches.every(m => m.winner || m.score === "Bay Geçti" || m.score === "Oynamadan Geçti");
@@ -4506,6 +4515,7 @@ window.generateAutoTeams = async function(tourId) {
 
             await docRef.update({ status: 'Devam Ediyor', stage: 'League', bracket: rounds });
             alert("Lig fikstürü başarıyla oluşturuldu ve maçlar başladı! 📅");
+            window.sendWhatsAppLeagueDrawNotification(tourData.name, rounds);
             openTournamentDetail(tourId, (await docRef.get()).data());
             
         } catch(e) { alert("Lig oluşturma hatası: " + e.message); }
@@ -4707,5 +4717,192 @@ window.generateAutoTeams = async function(tourId) {
             });
             if (response.ok) console.log("Eleme fikstürü başarıyla WhatsApp grubuna fırlatıldı! 🚀");
         } catch (error) { console.error("💥 Eleme kura bildirimi atılırken ağ hatası:", error); }
+    };
+
+    // --- 6. LİG FİKSTÜRÜ İLK OLUŞTUĞUNDA 1. HAFTA MAÇLARINI ATAN MOTOR ---
+    window.sendWhatsAppLeagueDrawNotification = async function(tournamentName, bracket) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        let matchesText = "";
+        
+        // Fikstürün sadece 1. Haftasındaki (bracket[0]) tüm maçları çekip listeliyoruz
+        if (bracket && bracket[0] && bracket[0].matches) {
+            bracket[0].matches.forEach((m, index) => {
+                const getPlayerFullName = (p) => {
+                    if (!p) return "Bekleniyor";
+                    if (p.isBye) return "- BAY (Maçsız Geçer) -";
+                    const p1 = userMap[p.p1]?.isim || 'Bilinmeyen';
+                    const p2 = p.p2 ? ` & ${userMap[p.p2]?.isim || 'Bilinmeyen'}` : '';
+                    return `${p1}${p2}`;
+                };
+                matchesText += `🎾 *Maç ${index + 1}:* ${getPlayerFullName(m.p1)} \n      *VS* \n      ${getPlayerFullName(m.p2)}\n\n`;
+            });
+        }
+
+        const messageText = 
+            `📅 *LİG SEZONU RESMEN BAŞLADI!* 📅\n\n` +
+            `🏆 *${tournamentName}* lig usulü turnuvamızda dev kura çekildi ve haftalık fikstür tamamen oluşturuldu!\n\n` +
+            `🔥 *1. Hafta Açılış Karşılaşmaları:* \n\n` +
+            matchesText +
+            `👉 _Tüm haftaların fikstürünü, anlık puan durumunu ve kort detaylarını görmek için hemen uygulamaya giriş yapabilirsiniz. Tüm oyuncularımıza başarılar dileriz!_ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Lig fikstür kuraları başarıyla WhatsApp grubuna fırlatıldı! 🚀");
+        } catch (error) { console.error("💥 Lig kura bildirimi atılırken ağ hatası:", error); }
+    };
+
+    // ============================================================================
+    // ========== 7. CANLI MAÇ SONUCU + DİNAMİK TABLO & AĞAÇ DUYURU MOTORU ========
+    // ============================================================================
+    window.sendWhatsAppMatchResultAndStandingsNotification = async function(tourId, matchTag, completedMatch) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        try {
+            // Güncel turnuva verisini veritabanından çekiyoruz
+            const tourSnap = await db.collection('tournaments').doc(tourId).get();
+            if (!tourSnap.exists) return;
+            const tourData = tourSnap.data();
+
+            // 1. MAÇ SONUCU ÖZET BAŞLIĞINI OLUŞTURMA
+            const p1Name = userMap[completedMatch.oyuncu1ID]?.isim || 'Oyuncu 1';
+            const p2Name = userMap[completedMatch.oyuncu2ID]?.isim || 'Oyuncu 2';
+            let t1 = p1Name; if(completedMatch.oyuncu1PartnerID) t1 += ` & ${userMap[completedMatch.oyuncu1PartnerID]?.isim || ''}`;
+            let t2 = p2Name; if(completedMatch.oyuncu2PartnerID) t2 += ` & ${userMap[completedMatch.oyuncu2PartnerID]?.isim || ''}`;
+            
+            const s = completedMatch.skor || {};
+            let scoreStr = `${s.s1_me || 0}-${s.s1_opp || 0}, ${s.s2_me || 0}-${s.s2_opp || 0}`;
+            if(s.s3_me || s.s3_opp) scoreStr += `, ${s.s3_me || 0}-${s.s3_opp || 0}`;
+            
+            const winnerName = completedMatch.kayitliKazananID === completedMatch.oyuncu1ID ? t1 : t2;
+
+            let messageText = 
+                `🏁 *MAÇ SONUCU TESCİLLENDİ!* 🏁\n\n` +
+                `🏆 *Turnuva:* ${tourData.name}\n` +
+                `⚔️ *Karşılaşma:* ${t1}  *VS* ${t2}\n` +
+                `🍏 *Skor:* ${scoreStr}\n` +
+                `🎉 *Galip:* _${winnerName}_\n` +
+                `----------------------------------------\n\n`;
+
+            // YARDIMCI: Oyuncu tam adını çekme fonksiyonu
+            const getPlayerFullNameLocal = (p) => {
+                if (!p) return "Bekleniyor"; if (p.isBye) return "- BAY -";
+                let name = userMap[p.p1]?.isim || 'Oyuncu';
+                if (p.p2) name += ` & ${userMap[p.p2]?.isim || 'Oyuncu'}`;
+                return name;
+            };
+
+            // SENARYO A: LİG USULÜ TURNUVA (Maç sonucu + Güncel Lig Puan Durumu)
+            if (tourData.systemType === 'league') {
+                const isIndividual = ((tourData.format || '').includes('Tekler') || tourData.standingsType === 'individual' || tourData.leagueTeamType === 'changing');
+                let stats = {};
+                
+                tourData.bracket.forEach(round => {
+                    round.matches.forEach(m => {
+                        if(!m.p1 || !m.p2) return;
+                        const p1Id = isIndividual ? m.p1.p1 : m.p1.p1 + "_" + (m.p1.p2 || '');
+                        const p2Id = isIndividual ? m.p2.p1 : m.p2.p1 + "_" + (m.p2.p2 || '');
+                        const addStat = (id, obj) => { if(!stats[id]) stats[id] = { name: getPlayerFullNameLocal(obj), pld: 0, w: 0, l: 0, pts: 0, gw: 0, gl: 0, rate: 0 }; };
+                        
+                        if (isIndividual) {
+                            addStat(m.p1.p1, { p1: m.p1.p1 }); if (m.p1.p2) addStat(m.p1.p2, { p1: m.p1.p2 });
+                            addStat(m.p2.p1, { p1: m.p2.p1 }); if (m.p2.p2) addStat(m.p2.p2, { p1: m.p2.p2 });
+                        } else {
+                            addStat(p1Id, m.p1); addStat(p2Id, m.p2);
+                        }
+
+                        if (m.winner) {
+                            const winId1 = isIndividual ? m.winner.p1 : m.winner.p1 + "_" + (m.winner.p2 || '');
+                            const losId1 = (m.winner.p1 === m.p1.p1) ? (isIndividual ? m.p2.p1 : m.p2.p1 + "_" + (m.p2.p2 || '')) : (isIndividual ? m.p1.p1 : m.p1.p1 + "_" + (m.p1.p2 || ''));
+                            stats[winId1].pld++; stats[winId1].w++; stats[winId1].pts += 3;
+                            stats[losId1].pld++; stats[losId1].l++; stats[losId1].pts += 1;
+                            if (isIndividual && m.winner.p2) { stats[m.winner.p2].pld++; stats[m.winner.p2].w++; stats[m.winner.p2].pts += 3; }
+                            if (isIndividual && m.p1.p2 && m.p2.p2) {
+                                const losId2 = (m.winner.p1 === m.p1.p1) ? m.p2.p2 : m.p1.p2;
+                                stats[losId2].pld++; stats[losId2].l++; stats[losId2].pts += 1;
+                            }
+                            let p1G = 0, p2G = 0;
+                            if (m.rawScore) {
+                                p1G = parseInt(m.rawScore.s1_me||0) + parseInt(m.rawScore.s2_me||0) + parseInt(m.rawScore.s3_me||0);
+                                p2G = parseInt(m.rawScore.s1_opp||0) + parseInt(m.rawScore.s2_opp||0) + parseInt(m.rawScore.s3_opp||0);
+                            }
+                            const updateGames = (id, wonG, lostG) => { if(stats[id]) { stats[id].gw += wonG; stats[id].gl += lostG; } };
+                            updateGames(p1Id, p1G, p2G); updateGames(p2Id, p2G, p1G);
+                            if (isIndividual && m.p1.p2) updateGames(m.p1.p2, p1G, p2G);
+                            if (isIndividual && m.p2.p2) updateGames(m.p2.p2, p2G, p1G);
+                        }
+                    });
+                });
+
+                Object.values(stats).forEach(st => { const totalGames = st.gw + st.gl; st.rate = totalGames > 0 ? (st.gw / totalGames) * 100 : 0; });
+                const sortedStats = Object.values(stats).sort((a,b) => b.pts - a.pts || b.rate - a.rate || b.gw - a.gw || a.pld - b.pld);
+
+                messageText += `🏆 *LİG PUAN DURUMU (GÜNCEL)*\n`;
+                sortedStats.forEach((st, idx) => {
+                    const medal = idx === 0 ? "👑 " : `${idx+1}. `;
+                    messageText += `${medal}*${st.name}*\n   ➔ ${st.pld}M | ${st.w}G - ${st.l}M | Güç: %${st.rate.toFixed(1)} | *${st.pts} Puan*\n`;
+                });
+            }
+            // SENARYO B: SADECE ELEME USULÜ VEYA ELEME AŞAMASINA GEÇİLMİŞ GRUP TURNUVASI
+            else if (tourData.systemType === 'knockout' || matchTag.startsWith('R')) {
+                messageText += `🌳 *ELEME AĞACI (FİNAL YOLU)*\n`;
+                tourData.bracket.forEach(round => {
+                    messageText += `\n📌 *${round.roundName.toUpperCase()}*\n`;
+                    round.matches.forEach((m, idx) => {
+                        const winnerText = m.winner ? `➔ 🎉 *[${getPlayerFullNameLocal(m.winner)}]*` : `➔ ⏳ _Bekliyor_`;
+                        messageText += `  🔹 M${idx + 1}: ${getPlayerFullNameLocal(m.p1)} *vs* ${getPlayerFullNameLocal(m.p2)} ${winnerText}\n`;
+                    });
+                });
+            }
+            // SENARYO C: GRUP AŞAMASINDA OLAN TURNUVA (Grup Puan Durumu + Eleme Ağacı)
+            else if (tourData.systemType === 'group_knockout' && matchTag.startsWith('G')) {
+                const parts = matchTag.split('_');
+                const gIdx = parseInt(parts[0].replace('G',''));
+                const group = tourData.groups[gIdx];
+
+                messageText += `📊 *${group.groupName} PUAN DURUMU (GÜNCEL)*\n`;
+                const isThreePoint = tourData.pointsSystem === 'threePoint';
+                
+                let sortedPlayers = [...group.players].sort((a, b) => {
+                    if (isThreePoint) return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
+                    return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
+                });
+
+                sortedPlayers.forEach((p, pIdx) => {
+                    const advClass = pIdx < (tourData.advancingCount || 2) ? "🟢" : "⚪";
+                    const scoreLabel = isThreePoint ? `*${p.groupPoints || 0} Puan*` : `Güç: %${(p.winRate || 0).toFixed(1)}`;
+                    messageText += `${advClass} ${pIdx + 1}. *${getPlayerFullNameLocal(p)}*\n   ➔ ${p.played}M | ${p.won}G - ${p.lost}M | ${scoreLabel}\n`;
+                });
+
+                // Eleme ağacının son halini de ekliyoruz
+                messageText += `\n🌳 *ELEME AĞACI (ADAY HARİTASI)*\n`;
+                tourData.bracket.forEach(round => {
+                    messageText += `\n📌 *${round.roundName.toUpperCase()}*\n`;
+                    round.matches.forEach((m, idx) => {
+                        const winnerText = m.winner ? `➔ 🎉 *[${getPlayerFullNameLocal(m.winner)}]*` : `➔ ⏳ _Bekliyor_`;
+                        messageText += `  🔹 M${idx + 1}: ${getPlayerFullNameLocal(m.p1)} *vs* ${getPlayerFullNameLocal(m.p2)} ${winnerText}\n`;
+                    });
+                });
+            }
+
+            // Green-API üzerinden hazırlanan tam mesajı fırlatıyoruz
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Canlı skor raporu ve dinamik tablolar WhatsApp grubuna başarıyla üflendi! 🚀");
+            
+        } catch (error) { console.error("💥 Canlı tablo duyurusu fırlatılırken ağ hatası:", error); }
     };
 }); // DOMContentLoaded SONU
