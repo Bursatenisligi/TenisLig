@@ -2128,6 +2128,10 @@ function showNotification(msg, type='info') {
                 });
 
                 alert("Turnuva başarıyla oluşturuldu! 🏆");
+
+                // [YENİ EKLEDİĞİMİZ SATIR] WhatsApp Grubuna resmi ve detayları uçurur
+                sendWhatsAppTournamentNotification(name, format, fee);
+
                 createTournamentForm.style.display = 'none';
                 tournamentListView.style.display = 'block';
                 
@@ -4480,5 +4484,49 @@ const getPlayerFullName = (p) => {
             
         } catch(e) { alert("Lig oluşturma hatası: " + e.message); }
     };
+
+
+   // --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (GÖRSELLİ) ---
+async function sendWhatsAppTournamentNotification(tournamentName, tournamentFormat, tournamentFee) {
+    // 1. Senin Green-API Bilgilerin (Buraları paneldeki bilgilerle doldur)
+    const WA_API_URL = "https://7107.api.greenapi.com"; 
+    const WA_INSTANCE_ID = "7107628348";                
+    const WA_API_TOKEN = "905304008164@c.us"; 
+    const WA_GROUP_ID = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+
+    // 2. Gruba gidecek dikkat çekici turnuva resmi (Unsplash üzerinden yüksek kaliteli tenis kupası resmi)
+    const strikingImage = "https://images.unsplash.com/photo-1617083934555-ac7d4feeeddf?q=80&w=1080&auto=format&fit=crop";
+
+    // 3. WhatsApp Grubuna düşecek havalı ve emojili metin tasarımı
+    const messageText = 
+        `🏆 *YENİ TURNUVA ALARMI!* 🏆\n\n` +
+        `🎾 Kortlarda heyecan yeniden zirveye tırmanıyor! Ligimizde yeni bir resmi turnuva kayda açılmıştır.\n\n` +
+        `🌟 *Turnuva Adı:* ${tournamentName}\n` +
+        `⚔️ *Format:* ${tournamentFormat}\n` +
+        `💰 *Giriş Ücreti:* ${tournamentFee} Puan\n\n` +
+        `🎯 *Hemen uygulamaya gir, profilinden kaydını tamamla ve rakiplerine meydan oku!* \n` +
+        `👉 _Unutma, son kayıt tarihinden önce yerini ayırtmalısın!_`;
+
+    // 4. Green-API'ye görseli ve altındaki yazıyı gruba fırlatmasını söyleyen komut köprüsü
+    const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendFileByUrl/${WA_API_TOKEN}`;
+    
+    const requestData = {
+        chatId: WA_GROUP_ID,
+        urlFile: strikingImage,
+        fileName: "turnuva_kupasi.jpg",
+        caption: messageText
+    };
+
+    try {
+        await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestData)
+        });
+        console.log("WhatsApp görselleri ve turnuva duyurusu gruba başarıyla fırlatıldı! 🚀");
+    } catch (error) {
+        console.error("WhatsApp'a duyuru gönderilirken bir hata oluştu:", error);
+    }
+}
   
 }); // DOMContentLoaded SONU
