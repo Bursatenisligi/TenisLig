@@ -3197,253 +3197,252 @@ window.adminAddParticipant = async function(tourId) {
     };
 
 // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
-    window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
-        const tourRef = db.collection('tournaments').doc(tourId);
-        const tourSnap = await tourRef.get();
-        const data = tourSnap.data();
+window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
+    const tourRef = db.collection('tournaments').doc(tourId);
+    const tourSnap = await tourRef.get();
+    const data = tourSnap.data();
 
-        const matchQuery = await db.collection('matches').where('tournamentId', '==', tourId).where('matchTag', '==', matchTag).get();
-        let mData = null;
-        if (!matchQuery.empty) mData = matchQuery.docs[0].data();
+    // 1. ADIM: Maçın gerçek Firestore ID'sini turnuva ağacından buluyoruz (ID Çakışma Çözümü)
+    let firestoreMatchId = null;
+    if (matchTag.startsWith('G')) {
+        const gIdx = parseInt(matchTag.split('_')[0].replace('G',''));
+        const mObj = data.groups?.[gIdx]?.matches?.find(m => m.matchId === matchTag);
+        if (mObj) firestoreMatchId = mObj.firestoreMatchId;
+    } else if (matchTag.startsWith('L') || matchTag.startsWith('R')) {
+        const rIdx = parseInt(matchTag.split('_')[0].replace(/[LR]/,''));
+        const mIdx = parseInt(matchTag.split('_')[1].replace('M',''));
+        firestoreMatchId = data.bracket?.[rIdx]?.matches?.[mIdx]?.firestoreMatchId;
+    }
 
-        // A. GRUP MAÇI (Sıralama ve Ağacı Canlı Güncelle)
-        if (matchTag.startsWith('G')) {
-            let groups = data.groups;
-            let bracket = data.bracket || [];
-            const parts = matchTag.split('_');
-            const gIdx = parseInt(parts[0].replace('G',''));
-            const group = groups[gIdx];
-            
-            const matchIndexInArray = group.matches.findIndex(m => m.matchId === matchTag);
-            if(matchIndexInArray === -1) return;
-            const mObj = group.matches[matchIndexInArray];
-            
-            const winnerObj = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
-            mObj.winner = winnerObj;
-            mObj.score = "Tamamlandı"; 
-            if (mData && mData.skor) {
-                mObj.rawScore = mData.skor;
-                mObj.reporterId = mData.sonucuGirenID;
+    // 2. ADIM: Doğrudan doğru maç dökümanını çekiyoruz
+    let mData = null;
+    if (firestoreMatchId) {
+        const mDoc = await db.collection('matches').doc(firestoreMatchId).get();
+        if (mDoc.exists) mData = mDoc.data();
+    }
+
+    // A. GRUP MAÇI İŞLEYİCİSİ
+    if (matchTag.startsWith('G')) {
+        let groups = data.groups;
+        let bracket = data.bracket || [];
+        const parts = matchTag.split('_');
+        const gIdx = parseInt(parts[0].replace('G',''));
+        const group = groups[gIdx];
+        
+        const matchIndexInArray = group.matches.findIndex(m => m.matchId === matchTag);
+        if(matchIndexInArray === -1) return;
+        const mObj = group.matches[matchIndexInArray];
+        
+        const winnerObj = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
+        mObj.winner = winnerObj;
+        mObj.score = "Tamamlandı"; 
+        if (mData && mData.skor) {
+            mObj.rawScore = mData.skor;
+            mObj.reporterId = mData.sonucuGirenID;
+        }
+        
+        group.players.forEach(p => { p.played = 0; p.won = 0; p.lost = 0; p.gamesWon = 0; p.gamesLost = 0; p.winRate = 0; p.groupPoints = 0; });
+        
+        group.matches.forEach(m => {
+            if (m.winner && m.rawScore) {
+                const s = m.rawScore;
+                const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
+                const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
+                const s3m = parseInt(s.s3_me||0); const s3o = parseInt(s.s3_opp||0);
+                
+                const isTeam1Reporter = (m.reporterId === m.p1.p1 || m.reporterId === m.p1.p2);
+                const p1G = isTeam1Reporter ? (s1m + s2m + s3m) : (s1o + s2o + s3o);
+                const p2G = isTeam1Reporter ? (s1o + s2o + s3o) : (s1m + s2m + s3m);
+                
+                const p1Id = m.p1.p1; const p2Id = m.p2.p1;
+                const p1Player = group.players.find(p => p.p1 === p1Id);
+                const p2Player = group.players.find(p => p.p1 === p2Id);
+                
+                if (p1Player && p2Player) {
+                    p1Player.played++; p2Player.played++;
+                    p1Player.gamesWon += p1G; p1Player.gamesLost += p2G;
+                    p2Player.gamesWon += p2G; p2Player.gamesLost += p1G;
+                    
+                    if (m.winner.p1 === p1Id) { 
+                        p1Player.won++; p2Player.lost++; 
+                        p1Player.groupPoints += 3; p2Player.groupPoints += 1;
+                    }
+                    else { 
+                        p2Player.won++; p1Player.lost++; 
+                        p2Player.groupPoints += 3; p1Player.groupPoints += 1;
+                    }
+                }
             }
+        });
+
+        group.players.forEach(p => {
+            const totalGames = p.gamesWon + p.gamesLost;
+            p.winRate = totalGames > 0 ? (p.gamesWon / totalGames) * 100 : 0;
+        });
+        
+        group.players.sort((a, b) => {
+            if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
+            return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
+        });
+
+        if (bracket.length > 0) {
+            const advCount = data.advancingCount || 2;
+            const topPlayers = group.players.slice(0, advCount);
             
-            group.players.forEach(p => { p.played = 0; p.won = 0; p.lost = 0; p.gamesWon = 0; p.gamesLost = 0; p.winRate = 0; p.groupPoints = 0; });
-            
-            group.matches.forEach(m => {
-                if (m.winner && m.rawScore) {
-                    const s = m.rawScore;
-                    const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
-                    const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
-                    
-                    const p1G = s1m + s2m; 
-                    const p2G = s1o + s2o;
-                    
-                    const p1Id = m.p1.p1; const p2Id = m.p2.p1;
-                    const p1Player = group.players.find(p => p.p1 === p1Id);
-                    const p2Player = group.players.find(p => p.p1 === p2Id);
-                    
-                    if (p1Player && p2Player) {
-                        p1Player.played++; p2Player.played++;
-                        p1Player.gamesWon += p1G; p1Player.gamesLost += p2G;
-                        p2Player.gamesWon += p2G; p2Player.gamesLost += p1G;
-                        
-                        if (m.winner.p1 === p1Id) { 
-                            p1Player.won++; p2Player.lost++; 
-                            p1Player.groupPoints += 3; p2Player.groupPoints += 1;
-                        }
-                        else { 
-                            p2Player.won++; p1Player.lost++; 
-                            p2Player.groupPoints += 3; p1Player.groupPoints += 1;
+            let allGroupsFinished = true;
+            data.groups.forEach(gr => gr.matches.forEach(mx => { if (!mx.winner && mx.score !== "Oynamadan Geçti" && mx.score !== "Bay Geçti") allGroupsFinished = false; }));
+
+            for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                let m = bracket[0].matches[mIdx];
+                for (let slotKey of ['p1', 'p2']) {
+                    let slot = m[slotKey];
+                    if (slot && slot.isPlaceholder && !slot.isBestExtra && slot.groupIdx === gIdx) {
+                        const currentPlayer = topPlayers[slot.rank - 1];
+                        if (currentPlayer && currentPlayer.played > 0) {
+                            m[slotKey] = { ...slot, ...currentPlayer, isLiveCandidate: !allGroupsFinished }; 
                         }
                     }
                 }
-            });
+            }
 
-            group.players.forEach(p => {
-                const totalGames = p.gamesWon + p.gamesLost;
-                p.winRate = totalGames > 0 ? (p.gamesWon / totalGames) * 100 : 0;
+            let extraPool = [];
+            data.groups.forEach(gr => {
+                for(let i = advCount; i < gr.players.length; i++) { 
+                    if (gr.players[i].played > 0) extraPool.push(gr.players[i]); 
+                }
             });
             
-            group.players.sort((a, b) => {
+            extraPool.sort((a, b) => {
                 if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
                 return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
             });
 
-            // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI (Sırayla ve Garantili) GÜNCELLE ---
-            // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI VE EN İYİ 3.LERİ CANLI GÜNCELLE ---
-    // --- YENİ: ELEME AĞACINDAKİ YER TUTUCULARI VE EN İYİ 3.LERİ CANLI GÜNCELLE ---
-            if (bracket.length > 0) {
-                const advCount = data.advancingCount || 2;
-                const topPlayers = group.players.slice(0, advCount);
-                
-                // Grupların tamamen bitip bitmediğini kontrol et
-                let allGroupsFinished = true;
-                data.groups.forEach(gr => gr.matches.forEach(mx => { if (!mx.winner && mx.score !== "Oynamadan Geçti" && mx.score !== "Bay Geçti") allGroupsFinished = false; }));
-
-                // 1. O AN BİTEN GRUBUN DİREKT ÇIKANLARINI AĞACA YERLEŞTİR
-                for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
-                    let m = bracket[0].matches[mIdx];
-                    for (let slotKey of ['p1', 'p2']) {
-                        let slot = m[slotKey];
-                        if (slot && slot.isPlaceholder && !slot.isBestExtra && slot.groupIdx === gIdx) {
-                            const currentPlayer = topPlayers[slot.rank - 1];
-                            if (currentPlayer && currentPlayer.played > 0) {
-                                m[slotKey] = { ...slot, ...currentPlayer, isLiveCandidate: !allGroupsFinished }; 
-                            }
-                        }
-                    }
-                }
-
-                // 2. EN İYİ 3.LERİ (EKSTRALARI) HESAPLA VE AĞACA YERLEŞTİR
-                let extraPool = [];
-                data.groups.forEach(gr => {
-                    for(let i = advCount; i < gr.players.length; i++) { 
-                        if (gr.players[i].played > 0) extraPool.push(gr.players[i]); 
-                    }
-                });
-                
-                extraPool.sort((a, b) => {
-                    if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
-                    return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
-                });
-
-                for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
-                    let m = bracket[0].matches[mIdx];
-                    for (let slotKey of ['p1', 'p2']) {
-                        let slot = m[slotKey];
-                        if (slot && slot.isPlaceholder && slot.isBestExtra) {
-                            const bestExtraPlayer = extraPool[slot.extraRank - 1]; 
-                            if (bestExtraPlayer) {
-                                m[slotKey] = { ...slot, ...bestExtraPlayer, isLiveCandidate: !allGroupsFinished };
-                            }
-                        }
-                    }
-                }
-
-                // 3. EĞER TÜM GRUPLAR BİTTİYSE, MAÇLARI RESMİLEŞTİR VE "(Aday)" ROZETİNİ KALDIR
-                if (allGroupsFinished) {
-                    for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
-                        let m = bracket[0].matches[mIdx];
-                        
-                        // Aday rozetlerini temizle
-                        if (m.p1 && m.p1.isLiveCandidate !== undefined) m.p1.isLiveCandidate = false;
-                        if (m.p2 && m.p2.isLiveCandidate !== undefined) m.p2.isLiveCandidate = false;
-
-                        // Her iki taraf da belliyse ve maç henüz oluşturulmadıysa oluştur
-                        if (m.p1 && m.p1.p1 && m.p2 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
-                            if (!m.firestoreMatchId) {
-                                m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
-                            } else {
-                                await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
-                            }
+            for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                let m = bracket[0].matches[mIdx];
+                for (let slotKey of ['p1', 'p2']) {
+                    let slot = m[slotKey];
+                    if (slot && slot.isPlaceholder && slot.isBestExtra) {
+                        const bestExtraPlayer = extraPool[slot.extraRank - 1]; 
+                        if (bestExtraPlayer) {
+                            m[slotKey] = { ...slot, ...bestExtraPlayer, isLiveCandidate: !allGroupsFinished };
                         }
                     }
                 }
             }
 
-            await tourRef.update({ groups: groups, bracket: bracket });
-            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-            }
+            if (allGroupsFinished) {
+                for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
+                    let m = bracket[0].matches[mIdx];
+                    if (m.p1 && m.p1.isLiveCandidate !== undefined) m.p1.isLiveCandidate = false;
+                    if (m.p2 && m.p2.isLiveCandidate !== undefined) m.p2.isLiveCandidate = false;
 
-            const subject = "📊 Grubunda Yeni Maç Sonucu!";
-            const body = `<p><strong>${data.name}</strong> turnuvasında, bulunduğun <strong>${group.groupName}</strong> grubunda yeni bir maç sonuçlandı.</p><p>Puan durumu güncellendi. Sıralamanı kontrol etmek için uygulamaya gir!</p>`;
-            group.players.forEach(p => {
-                if (p.p1 !== mObj.p1.p1 && p.p1 !== mObj.p2.p1) {
+                    if (m.p1 && m.p1.p1 && m.p2 && m.p2.p1 && !m.p1.isBye && !m.p2.isBye) {
+                        if (!m.firestoreMatchId) {
+                            m.firestoreMatchId = await window.createTournamentMatchDoc(tourId, m.p1, m.p2, bracket[0].roundName, `R0_M${mIdx}`, data.format);
+                        } else {
+                            await db.collection('matches').doc(m.firestoreMatchId).update({ oyuncu1ID: m.p1.p1, oyuncu1PartnerID: m.p1.p2 || null, oyuncu2ID: m.p2.p1, oyuncu2PartnerID: m.p2.p2 || null });
+                        }
+                    }
+                }
+            }
+        }
+
+        await tourRef.update({ groups: groups, bracket: bracket });
+
+        // WhatsApp Canlı Skor + Çizgili Tablo Bildirimi
+        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+        }
+        return; 
+    }
+    
+    // LİG MAÇI İŞLEYİCİSİ
+    if (matchTag && matchTag.startsWith('L')) {
+        let bracket = data.bracket || [];
+        const parts = matchTag.split('_');
+        const rIdx = parseInt(parts[0].replace('L',''));
+        const mIdx = parseInt(parts[1].replace('M',''));
+        if (bracket.length === 0 || !bracket[rIdx] || !bracket[rIdx].matches[mIdx]) return; 
+
+        const mObj = bracket[rIdx].matches[mIdx];
+        mObj.winner = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
+        mObj.score = "Tamamlandı";
+        if (mData && mData.skor) mObj.rawScore = mData.skor;
+
+        await tourRef.update({ bracket: bracket });
+        
+        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+        }
+        return;
+    }
+
+    // B. ELEME MAÇI İŞLEYİCİSİ
+    if (matchTag.startsWith('R')) {
+        let bracket = data.bracket;
+        const parts = matchTag.split('_');
+        const rIdx = parseInt(parts[0].replace('R',''));
+        const mIdx = parseInt(parts[1].replace('M',''));
+
+        const winnerObj = bracket[rIdx].matches[mIdx].p1.p1 === winnerUid ? bracket[rIdx].matches[mIdx].p1 : bracket[rIdx].matches[mIdx].p2;
+        
+        bracket[rIdx].matches[mIdx].winner = winnerObj;
+        bracket[rIdx].matches[mIdx].score = "Tamamlandı";
+
+        const nextR = rIdx + 1;
+        if (nextR < bracket.length) {
+            const nextM = Math.floor(mIdx / 2);
+            if (mIdx % 2 === 0) bracket[nextR].matches[nextM].p1 = winnerObj;
+            else bracket[nextR].matches[nextM].p2 = winnerObj;
+
+            const mObj = bracket[nextR].matches[nextM];
+            if (mObj.p1 && mObj.p2 && !mObj.firestoreMatchId) {
+                const newId = await window.createTournamentMatchDoc(tourId, mObj.p1, mObj.p2, bracket[nextR].roundName, `R${nextR}_M${nextM}`);
+                bracket[nextR].matches[nextM].firestoreMatchId = newId;
+            }
+        } else {
+            data.status = 'Bitti'; 
+        }
+        await tourRef.update({ bracket: bracket, status: data.status });
+
+        // WhatsApp Canlı Skor + Eleme Ağacı Bildirimi
+        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+        }
+
+        // --- SENİN SORDUĞUN KORUNAN E-POSTA BİLDİRİM ALANI ---
+        const currentRoundMatches = bracket[rIdx].matches;
+        const isRoundFinished = currentRoundMatches.every(m => m.winner || m.score === "Bay Geçti" || m.score === "Oynamadan Geçti");
+
+        if (isRoundFinished) {
+            const roundName = bracket[rIdx].roundName;
+            const isFinal = (rIdx === bracket.length - 1);
+
+            if (isFinal) {
+                let champName = userMap[winnerObj.p1]?.isim || 'Bir takım';
+                if (winnerObj.p2 && userMap[winnerObj.p2]) champName += ` & ${userMap[winnerObj.p2].isim}`;
+
+                const subject = `👑 Şampiyon Belli Oldu: ${champName}!`;
+                const body = `<p><strong>${data.name}</strong> turnuvası sona erdi!</p><p>Büyük finali kazanarak şampiyon olan <strong>${champName}</strong> takımını/oyuncusunu tebrik ederiz. 🏆</p><p>Turnuva sonucunu incelemek için uygulamaya göz atın.</p>`;
+                
+                data.participants.forEach(p => {
                     if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
                     if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
-                }
-            });
-            return; 
-        }
-        // LİG MAÇI İŞLEYİCİSİ
-        if (matchTag && matchTag.startsWith('L')) {
-            let bracket = data.bracket || [];
-            const parts = matchTag.split('_');
-            const rIdx = parseInt(parts[0].replace('L',''));
-            const mIdx = parseInt(parts[1].replace('M',''));
-            if (bracket.length === 0 || !bracket[rIdx] || !bracket[rIdx].matches[mIdx]) return; 
-
-            const mObj = bracket[rIdx].matches[mIdx];
-            mObj.winner = (mObj.p1.p1 === winnerUid) ? mObj.p1 : mObj.p2;
-            mObj.score = "Tamamlandı";
-            if (mData && mData.skor) mObj.rawScore = mData.skor;
-
-            await tourRef.update({ bracket: bracket });
-            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-            }
-            
-            const subject = "📊 Ligde Yeni Maç Sonucu!";
-            const body = `<p><strong>${data.name}</strong> liginde yeni bir maç sonuçlandı.</p><p>Güncel puan durumunu incelemek için uygulamaya göz at!</p>`;
-            data.participants.forEach(p => {
-                if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
-                if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
-            });
-            return;
-        }
-
-        // B. ELEME MAÇI (Fikstür Atlatma ve Bildirimler)
-        if (matchTag.startsWith('R')) {
-            let bracket = data.bracket;
-            const parts = matchTag.split('_');
-            const rIdx = parseInt(parts[0].replace('R',''));
-            const mIdx = parseInt(parts[1].replace('M',''));
-
-            const winnerObj = bracket[rIdx].matches[mIdx].p1.p1 === winnerUid ? bracket[rIdx].matches[mIdx].p1 : bracket[rIdx].matches[mIdx].p2;
-            
-            bracket[rIdx].matches[mIdx].winner = winnerObj;
-            bracket[rIdx].matches[mIdx].score = "Tamamlandı";
-
-            const nextR = rIdx + 1;
-            if (nextR < bracket.length) {
-                const nextM = Math.floor(mIdx / 2);
-                if (mIdx % 2 === 0) bracket[nextR].matches[nextM].p1 = winnerObj;
-                else bracket[nextR].matches[nextM].p2 = winnerObj;
-
-                const mObj = bracket[nextR].matches[nextM];
-                if (mObj.p1 && mObj.p2 && !mObj.firestoreMatchId) {
-                    const newId = await window.createTournamentMatchDoc(tourId, mObj.p1, mObj.p2, bracket[nextR].roundName, `R${nextR}_M${nextM}`);
-                    bracket[nextR].matches[nextM].firestoreMatchId = newId;
-                }
+                });
             } else {
-                data.status = 'Bitti'; 
-            }
-            await tourRef.update({ bracket: bracket, status: data.status });
-            if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-                await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-            }
-
-            const currentRoundMatches = bracket[rIdx].matches;
-            const isRoundFinished = currentRoundMatches.every(m => m.winner || m.score === "Bay Geçti" || m.score === "Oynamadan Geçti");
-
-            if (isRoundFinished) {
-                const roundName = bracket[rIdx].roundName;
-                const isFinal = (rIdx === bracket.length - 1);
-
-                if (isFinal) {
-                    let champName = userMap[winnerObj.p1]?.isim || 'Bir takım';
-                    if (winnerObj.p2 && userMap[winnerObj.p2]) champName += ` & ${userMap[winnerObj.p2].isim}`;
-
-                    const subject = `👑 Şampiyon Belli Oldu: ${champName}!`;
-                    const body = `<p><strong>${data.name}</strong> turnuvası sona erdi!</p><p>Büyük finali kazanarak şampiyon olan <strong>${champName}</strong> takımını/oyuncusunu tebrik ederiz. 🏆</p><p>Turnuva sonucunu incelemek için uygulamaya göz atın.</p>`;
-                    
-                    data.participants.forEach(p => {
-                        if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
-                        if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
-                    });
-                } else {
-                    const nextRoundName = bracket[nextR].roundName;
-                    const subject = `🎾 ${roundName} Tamamlandı!`;
-                    const body = `<p><strong>${data.name}</strong> turnuvasında <strong>${roundName}</strong> maçlarının tümü tamamlandı ve ${nextRoundName} eşleşmeleri belli oldu!</p><p>Güncel fikstürü görmek için uygulamayı ziyaret edin.</p>`;
-                    
-                    data.participants.forEach(p => {
-                        if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
-                        if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
-                    });
-                }
+                const nextRoundName = bracket[nextR].roundName;
+                const subject = `🎾 ${roundName} Tamamlandı!`;
+                const body = `<p><strong>${data.name}</strong> turnuvasında <strong>${roundName}</strong> maçlarının tümü tamamlandı ve ${nextRoundName} eşleşmeleri belli oldu!</p><p>Güncel fikstürü görmek için uygulamayı ziyaret edin.</p>`;
+                
+                data.participants.forEach(p => {
+                    if (p.p1 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p1, subject, body);
+                    if (p.p2 && typeof sendNotificationEmail === 'function') sendNotificationEmail(p.p2, subject, body);
+                });
             }
         }
-    };
+        // --------------------------------------------------------
+    }
+};
 
     // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
 // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
