@@ -4487,20 +4487,16 @@ const getPlayerFullName = (p) => {
 
 
    
-/// --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (BULLETPREOF SÜRÜM) ---
+// --- GREEN-API SADECE YAZI ODAKLI DUYURU MOTORU ---
 async function sendWhatsAppTournamentNotification(tournamentName, tournamentFormat, tournamentFee) {
     const WA_API_URL = "https://7107.api.greenapi.com"; 
     const WA_INSTANCE_ID = "7107628348";                
     const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
-
-    // CRITICAL: Kendi numaran yerine testi görmek için geçici olarak BAŞKA bir WhatsApp numarası yaz!
-    // Örn: "90532XXXXXXX@c.us"
+    
+    // TEST İÇİN: Kendi numaranız yerine lütfen evdeki başka birinin WhatsApp numarasını yazın!
     const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
 
-    // Sonu direkt .jpg ile biten, sunucunun saniyede indirebileceği tertemiz bir tenis kupası görseli
-    const strikingImage = "https://images.unsplash.com/photo-1542144557-f550eeed3b0c.jpg";
-
-    // WhatsApp Sohbetine düşecek metin tasarımı
+    // WhatsApp Sohbetine düşecek kalın harfli ve emojili duyuru metni
     const messageText = 
         `🏆 *YENİ TURNUVA ALARMI!* 🏆\n\n` +
         `🎾 Kortlarda heyecan yeniden zirveye tırmanıyor! Ligimizde yeni bir resmi turnuva kayda açılmıştır.\n\n` +
@@ -4510,13 +4506,12 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
         `🎯 *Hemen uygulamaya gir, profilinden kaydını tamamla ve rakiplerine meydan oku!* \n` +
         `👉 _Unutma, son kayıt tarihinden önce yerini ayırtmalısın!_`;
 
-    const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendFileByUrl/${WA_API_TOKEN}`;
+    // RESİM OLMADAN, DİREKT METİN GÖNDERMEK İÇİN EN NOKTA: sendMessage
+    const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`;
     
     const requestData = {
         chatId: WA_RECIPIENT_CHAT_ID,
-        urlFile: strikingImage,
-        fileName: "turnuva_kupasi.jpg",
-        caption: messageText
+        message: messageText
     };
 
     try {
@@ -4529,13 +4524,13 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
         const result = await response.json();
 
         if (response.ok) {
-            console.log("Green-API Sunucu Yanıtı (Mesaj ID):", result.idMessage);
-            console.log("WhatsApp görseli ve turnuva duyurusu başarıyla gönderildi! 🚀");
+            console.log("Green-API Sunucu Yanıtı (Yazı ID):", result.idMessage);
+            console.log("Metin duyurusu şahsi sohbete başarıyla gönderildi! 🚀");
         } else {
             console.error("🛑 Green-API İsteği Reddetti! Detay:", result);
         }
     } catch (error) {
-        console.error("💥 Ağ Hatası (Sunucuya erişilemedi):", error);
+        console.error("💥 Ağ Hatası:", error);
     }
 }
   
