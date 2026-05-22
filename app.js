@@ -4488,15 +4488,11 @@ const getPlayerFullName = (p) => {
 
    
 // --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (KİŞİSEL SOHBET UYUMLU) ---
+// --- GREEN-API SÜPER WHATSAPP DUYURU MOTORU (GELMİŞ GEÇMİŞ EN DETAYLI RAPORLAYICI) ---
 async function sendWhatsAppTournamentNotification(tournamentName, tournamentFormat, tournamentFee) {
     const WA_API_URL = "https://7107.api.greenapi.com"; 
     const WA_INSTANCE_ID = "7107628348";                
-    
-    // 1. ADIM: Buraya Green-API panelindeki göz (👁️) butonuna basınca çıkan UPUZUN gizli şifreyi yapıştır!
     const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
-    
-    // 2. ADIM: Mesajın gitmesini istediğin telefon numarasını başına ülke kodu (90) koyarak ve sonuna @c.us ekleyerek yaz.
-    // Örn: "905304008164@c.us" (Eğer ilk testi kendine atacaksan kendi numaranı yazabilirsin)
     const WA_RECIPIENT_CHAT_ID = "905304008164@c.us"; 
 
     // Dikkat çekici turnuva resmi
@@ -4512,25 +4508,35 @@ async function sendWhatsAppTournamentNotification(tournamentName, tournamentForm
         `🎯 *Hemen uygulamaya gir, profilinden kaydını tamamla ve rakiplerine meydan oku!* \n` +
         `👉 _Unutma, son kayıt tarihinden önce yerini ayırtmalısın!_`;
 
-    // İstek atılacak Green-API köprü adresi
     const endpoint = `${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendFileByUrl/${WA_API_TOKEN}`;
     
     const requestData = {
-        chatId: WA_RECIPIENT_CHAT_ID, // Numara tabanlı sohbet ID'si
+        chatId: WA_RECIPIENT_CHAT_ID,
         urlFile: strikingImage,
         fileName: "turnuva_kupasi.jpg",
         caption: messageText
     };
 
     try {
-        await fetch(endpoint, {
+        const response = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestData)
         });
-        console.log("WhatsApp görseli ve turnuva duyurusu şahsi sohbete başarıyla gönderildi! 🚀");
+
+        // Sunucunun döndüğü ham veriyi okuyoruz
+        const result = await response.json();
+
+        if (response.ok) {
+            // Eğer her şey gerçekten yolundaysa Green-API bize benzersiz bir mesaj ID'si üretir
+            console.log("Green-API Sunucu Yanıtı (Mesaj ID):", result.idMessage);
+            console.log("WhatsApp görseli ve turnuva duyurusu şahsi sohbete başarıyla gönderildi! 🚀");
+        } else {
+            // Sunucu isteği reddettiyse kırmızı bir hata basacak ve sebebini söyleyecek
+            console.error("🛑 Green-API İsteği Reddetti! Detay:", result);
+        }
     } catch (error) {
-        console.error("WhatsApp'a duyuru gönderilirken bir hata oluştu:", error);
+        console.error("💥 Ağ Hatası (Sunucuya erişilemedi):", error);
     }
 }
   
