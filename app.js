@@ -1784,6 +1784,7 @@ const shareMatchBtn = document.getElementById('btn-share-match-detail');
             });
 
             alert("Gruplar ve Fikstür Yapısı başarıyla oluşturuldu! 🏆");
+            window.sendWhatsAppGroupStageDrawNotification(tourData.name, groups);
             openTournamentDetail(tourId, (await docRef.get()).data());
 
         } catch (e) { console.error(e); alert("Gruplar oluşturulurken hata: " + e.message); }
@@ -2353,13 +2354,26 @@ submitChallengeBtn.addEventListener('click', async () => {
         });
     }
 
-    async function saveOnlyPhoto(matchId) {
+ async function saveOnlyPhoto(matchId) {
         const input = document.getElementById('standalone-photo-input'); const file = input.files[0];
         if (!file) { alert("Lütfen önce bir fotoğraf seçin."); return; }
         const btn = document.getElementById('btn-save-photo-only'); btn.textContent = "Yükleniyor..."; btn.disabled = true;
         try {
             const photoUrl = await compressAndConvertToBase64(file, 1024, 0.8);
             await db.collection('matches').doc(matchId).update({ macFotoURL: photoUrl });
+            
+            // --- [YENİ]: WHATSAPP FOTOĞRAF ENTEGRASYONU ---
+            const matchDoc = await db.collection('matches').doc(matchId).get();
+            const matchData = matchDoc.data();
+            
+            // Sadece ve sadece "Turnuva" maçlarına fotoğraf yüklendiğinde grupta paylaşılmasını tetikliyoruz
+            if (matchData && matchData.macTipi === 'Turnuva') {
+                if (typeof window.sendWhatsAppMatchPhotoNotification === 'function') {
+                    await window.sendWhatsAppMatchPhotoNotification(matchData, file);
+                }
+            }
+            // ----------------------------------------------
+
             alert("Fotoğraf başarıyla güncellendi! 📸"); showMatchDetail(matchId); 
         } catch (error) { console.error("Fotoğraf yükleme hatası:", error); alert("Fotoğraf yüklenirken bir hata oluştu."); } finally { btn.textContent = "Fotoğrafı Kaydet 💾"; btn.disabled = false; }
     }
@@ -3647,6 +3661,7 @@ window.adminAddParticipant = async function(tourId) {
 
             await docRef.update({ status: 'Devam Ediyor', bracket: rounds });
             alert("Turnuva fikstürü oluşturuldu ve maçlar açıldı! 🏆");
+            window.sendWhatsAppKnockoutDrawNotification(tourData.name, rounds);
             openTournamentDetail(tourId, (await docRef.get()).data());
         } catch(e) { alert("Hata: " + e.message); }
     };
@@ -4549,7 +4564,7 @@ window.generateAutoTeams = async function(tourId) {
         const messageText = 
             `🤝 *SİSTEM TAKIMLARI KURULDU!* 🤝\n\n` +
             `🏆 *${tournamentName}* turnuvası için otomatik eşleşmeler ve kura aşaması başarıyla tamamlanmıştır.\n\n` +
-            `Algoritma tarafından oyuncu performanslarına göre kurulan dengeli takımlarımız şu şekildedir:\n\n` +
+            
             teamsListText + `\n` +
             `🎯 Tüm takımlarımıza ve oyuncularımıza yürekten başarılar dileriz! \n` +
             `👉 _Haftalık lig fikstürü, maç saatleri ve kort detayları için hemen uygulamaya giriş yapabilirsiniz._ 🎾`;
@@ -4563,5 +4578,134 @@ window.generateAutoTeams = async function(tourId) {
             if (response.ok) console.log("Takım listesi WhatsApp grubuna başarıyla uçuruldu! 🚀");
         } catch (error) { console.error("💥 WhatsApp takım duyurusu atılırken ağ hatası:", error); }
     };
-  
+
+    // --- 3. TURNUVA MAÇLARINA FOTOĞRAF EKLENDİĞİNDE GRUBA UÇURAN MOTOR ---
+    window.sendWhatsAppMatchPhotoNotification = async function(matchData, fileFile) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1';
+        const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
+        
+        let team1Name = p1Name.split(' ')[0];
+        if (matchData.oyuncu1PartnerID && userMap[matchData.oyuncu1PartnerID]) {
+            team1Name += ` & ${userMap[matchData.oyuncu1PartnerID].isim.split(' ')[0]}`;
+        }
+        let team2Name = p2Name.split(' ')[0];
+        if (matchData.oyuncu2PartnerID && userMap[matchData.oyuncu2PartnerID]) {
+            team2Name += ` & ${userMap[matchData.oyuncu2PartnerID].isim.split(' ')[0]}`;
+        }
+
+        // Eğer maç skoru girildiyse mesajın altına skoru da ekleyelim
+        let scoreText = "";
+        if (matchData.skor) {
+            const s = matchData.skor;
+            scoreText = `\n🍏 *Skor:* ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}` + (s.s3_me || s.s3_opp ? `, ${s.s3_me}-${s.s3_opp}` : '');
+        }
+
+        // WhatsApp alt yazısı tasarımı
+        const captionText = 
+            `📸 *KORTLARDAN HARİKA BİR KARE!* 📸\n\n` +
+            `🏆 Turnuva arenasından yeni bir maç fotoğrafı paylaşıldı!\n\n` +
+            `⚔️ *Karşılaşma:* ${team1Name} vs ${team2Name}${scoreText}\n` +
+            `📍 *Kort:* ${matchData.macYeri || 'Belirtilmemiş'}\n\n` +
+            `👉 _Uygulamaya girip maç detayından bu fotoğrafa yorum yapabilir ve ankete katılabilirsiniz!_ 🎾`;
+
+        // Dosyayı ham haliyle Green-API'ye yüklemek için bir veri paketi (FormData) oluşturuyoruz
+        const formData = new FormData();
+        formData.append("chatId", WA_RECIPIENT_CHAT_ID);
+        formData.append("file", fileFile);
+        formData.append("fileName", "mac_karesi.jpg");
+        formData.append("caption", captionText);
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendFileByUpload/${WA_API_TOKEN}`, {
+                method: "POST",
+                body: formData
+            });
+            if (response.ok) {
+                console.log("Maç fotoğrafı ve açıklaması başarıyla WhatsApp grubuna fırlatıldı! 🚀");
+            }
+        } catch (error) {
+            console.error("💥 WhatsApp fotoğraf duyurusu atılırken ağ hatası:", error);
+        }
+    };
+  // --- 4. GRUPLAR İLK OLUŞTUĞUNDA TÜM GRUP LİSTELERİNİ WHATSAPP'A ATAN MOTOR ---
+    window.sendWhatsAppGroupStageDrawNotification = async function(tournamentName, groups) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        let drawText = "";
+        
+        // Tüm grupları ve içindeki oyuncuları tek tek döngüyle metne ekliyoruz
+        groups.forEach(g => {
+            drawText += `📦 *${g.groupName}*\n`;
+            g.players.forEach((p, idx) => {
+                const p1FullName = userMap[p.p1]?.isim || 'Bilinmeyen Oyuncu';
+                const p2FullName = p.p2 ? ` & ${userMap[p.p2]?.isim || 'Bilinmeyen Oyuncu'}` : '';
+                drawText += `  ${idx + 1}️⃣ ${p1FullName}${p2FullName}\n`;
+            });
+            drawText += `\n`;
+        });
+
+        const messageText = 
+            `📊 *TURNUVA GRUPLARI VE FİKSTÜRÜ BELLİ OLDU!* 📊\n\n` +
+            `🏆 *${tournamentName}* turnuvasında grup aşaması kura çekimleri tamamlandı! Oyuncularımızın tam listesi ve yer alacağı gruplar şu şekildedir:\n\n` +
+            drawText +
+            `⚔️ Grup maçları ve eleme ağacı detayları uygulamaya yüklenmiştir.\n\n` +
+            `👉 _Hemen uygulamaya girip ilk rakiplerinizi görebilir ve maçlarınızı planlamaya başlayabilirsiniz. Herkese başarılar!_ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Grup kuraları başarıyla WhatsApp grubuna fırlatıldı! 🚀");
+        } catch (error) { console.error("💥 Grup kura bildirimi atılırken ağ hatası:", error); }
+    };
+
+    // --- 5. ELEME AĞACI (KNOCKOUT) OLUŞTUĞUNDA 1. TUR MAÇLARINI WHATSAPP'A ATAN MOTOR ---
+    window.sendWhatsAppKnockoutDrawNotification = async function(tournamentName, bracket) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        let matchesText = "";
+        
+        // Eleme ağacının ilk turundaki (bracket[0]) tüm maçları çekiyoruz
+        if (bracket && bracket[0] && bracket[0].matches) {
+            bracket[0].matches.forEach((m, index) => {
+                const getPlayerFullName = (p) => {
+                    if (!p) return "Bekleniyor";
+                    if (p.isBye) return "- BAY (Maçsız Tur Atlar) -";
+                    const p1 = userMap[p.p1]?.isim || 'Bilinmeyen';
+                    const p2 = p.p2 ? ` & ${userMap[p.p2]?.isim || 'Bilinmeyen'}` : '';
+                    return `${p1}${p2}`;
+                };
+                matchesText += `🎾 *Maç ${index + 1}:* ${getPlayerFullName(m.p1)} \n      *VS* \n      ${getPlayerFullName(m.p2)}\n\n`;
+            });
+        }
+
+        const messageText = 
+            `👑 *ELEME AĞACI VE FİKSTÜR OLUŞTURULDU!* 👑\n\n` +
+            `🏆 *${tournamentName}* turnuvasında direkt eleme (knockout) kuraları çekildi ve final yolu haritası çizildi!\n\n` +
+            `🔥 *1. Tur Karşılaşmaları:* \n\n` +
+            matchesText +
+            `👉 _Hemen uygulamaya giriş yapıp tüm eleme ağacını (bracket) görebilir, rakiplerinizle maçlarınızı organize edebilirsiniz!_ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Eleme fikstürü başarıyla WhatsApp grubuna fırlatıldı! 🚀");
+        } catch (error) { console.error("💥 Eleme kura bildirimi atılırken ağ hatası:", error); }
+    };
 }); // DOMContentLoaded SONU
