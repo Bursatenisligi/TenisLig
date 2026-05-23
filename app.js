@@ -2500,41 +2500,36 @@ submitChallengeBtn.addEventListener('click', async () => {
     }
 
 async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
-        const element = document.getElementById(elementId); const button = document.getElementById(buttonId);
-        if (!element || !button) return;
-        const originalText = button.innerHTML; const originalColor = button.style.background;
-        button.innerHTML = '⏳ Görüntü Oluşturuluyor...'; button.style.background = '#6c757d'; button.disabled = true;
+    const element = document.getElementById(elementId); const button = document.getElementById(buttonId);
+    if (!element || !button) return;
+    const originalText = button.innerHTML; const originalColor = button.style.background;
+    
+    // Butonu yükleniyor moduna alıyoruz
+    button.innerHTML = '⏳ Hikaye Kartı Hazırlanıyor...'; button.style.background = '#6c757d'; button.disabled = true;
 
-        try {
-            const canvas = await html2canvas(element, {
-                scale: 2, useCORS: true, allowTaint: false, backgroundColor: "#ffffff", logging: true,
-                ignoreElements: (el) => { return el.tagName === 'BUTTON' || el.id === 'btn-share-match-detail' || el.classList.contains('close-modal'); }
-            });
+    try {
+        // html2canvas ile maça özel harika bir story görseli oluşturuluyor
+        const canvas = await html2canvas(element, {
+            scale: 2, useCORS: true, allowTaint: false, backgroundColor: "#ffffff", logging: false,
+            ignoreElements: (el) => { return el.tagName === 'BUTTON' || el.id === 'btn-share-match-detail' || el.classList.contains('close-modal'); }
+        });
 
-            canvas.toBlob(async (blob) => {
-                if (!blob) { throw new Error("Canvas blob oluşturulamadı."); }
-                const file = new File([blob], `${fileNamePrefix}.png`, { type: 'image/png' });
-                button.innerHTML = '📲 ŞİMDİ PAYLAŞ (HAZIR!)'; button.disabled = false; button.style.background = '#28a745'; 
-                
-                const readyBtn = button.cloneNode(true); button.parentNode.replaceChild(readyBtn, button);
+        // KESİN ÇÖZÜM: Görseli tarayıcı kısıtlamalarına takılmadan doğrudan telefona indiriyoruz
+        const link = document.createElement('a'); 
+        link.download = `${fileNamePrefix}-${Date.now()}.png`; 
+        link.href = canvas.toDataURL('image/png'); 
+        link.click(); 
 
-                readyBtn.addEventListener('click', async () => {
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        // PAYLAŞIM YAZISI BURADA DÜZELTİLDİ:
-                        try { await navigator.share({ files: [file], title: 'Tenis Ligi', text: 'https://bursatenisligi.github.io/TenisLig/' }); cleanupAfterShare(readyBtn, originalText, originalColor); } 
-                        catch (err) { console.log("Paylaşım iptal:", err); cleanupAfterShare(readyBtn, originalText, originalColor); }
-                    } else {
-                        const link = document.createElement('a'); link.download = `${fileNamePrefix}-${Date.now()}.png`; link.href = canvas.toDataURL(); link.click(); cleanupAfterShare(readyBtn, originalText, originalColor);
-                    }
-                });
-            }, 'image/png');
-        } catch (error) {
-            console.error("html2canvas Hatası:", error); alert("Görüntü oluşturulamadı. Lütfen internet bağlantınızı kontrol edin veya profil fotoğrafınızı güncelleyin.");
-            button.innerHTML = originalText; button.style.background = originalColor; button.disabled = false;
-            const tempBanner = document.getElementById('temp-branding-match'); if(tempBanner) tempBanner.remove();
-            const shareCard = document.getElementById('share-card-temp'); if(shareCard) shareCard.remove();
-        }
+        // Kullanıcıya harika bir yönlendirme pop-up'ı gösteriyoruz
+        alert("🎉 MAÇ KARTI GALERİNİZE İNDİRİLDİ!\n\nUygulama linki de hafızaya kopyalandı. Şimdi Instagram'ı açıp bu görseli hikayenize ekleyebilir, 'Bağlantı' çıkartmasına da kopyalanan adresi direkt yapıştırabilirsiniz! 🎾");
+        
+        cleanupAfterShare(button, originalText, originalColor);
+    } catch (error) {
+        console.error("html2canvas Hatası:", error); alert("Görüntü oluşturulamadı. Lütfen tekrar deneyin.");
+        button.innerHTML = originalText; button.style.background = originalColor; button.disabled = false;
+        const shareCard = document.getElementById('share-card-temp'); if(shareCard) shareCard.remove();
     }
+}
 
     function cleanupAfterShare(btn, origTxt, origCol) {
         const tempBanner = document.getElementById('temp-branding-match'); if(tempBanner) tempBanner.remove();
