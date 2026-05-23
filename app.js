@@ -1355,11 +1355,13 @@ function showMatchDetail(matchDocId) {
             if(photoInput) photoInput.value = '';
 
             const isEligibleStatus = ['Hazır', 'Sonuç_Bekleniyor', 'Tamamlandı'].includes(match.durum);
-            if (isParticipant && isEligibleStatus && photoArea) {
-                photoArea.style.display = 'block';
-                if (match.macFotoURL && currentPhotoDisplay) { currentPhotoDisplay.src = match.macFotoURL; currentPhotoDisplay.style.display = 'block'; } else if(currentPhotoDisplay) { currentPhotoDisplay.style.display = 'none'; }
-                const saveBtn = document.getElementById('btn-save-photo-only'); if(saveBtn) saveBtn.onclick = () => saveOnlyPhoto(matchDocId);
-            } else if (photoArea) { photoArea.style.display = 'none'; }
+
+// [GÜNCELLENEN SATIR]: Yetki alanına turnuva adminini de (isTourAdmin) dahil ettik
+if ((isParticipant || isTourAdmin) && isEligibleStatus && photoArea) {
+    photoArea.style.display = 'block';
+    if (match.macFotoURL && currentPhotoDisplay) { currentPhotoDisplay.src = match.macFotoURL; currentPhotoDisplay.style.display = 'block'; } else if(currentPhotoDisplay) { currentPhotoDisplay.style.display = 'none'; }
+    const saveBtn = document.getElementById('btn-save-photo-only'); if(saveBtn) saveBtn.onclick = () => saveOnlyPhoto(matchDocId);
+} else if (photoArea) { photoArea.style.display = 'none'; }
 
             loadMatchInteractions(matchDocId, match);
 
