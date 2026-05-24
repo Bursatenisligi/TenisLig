@@ -1161,7 +1161,7 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
         if(!targetUserId) targetUserId = auth.currentUser.uid; statFormBadges.innerHTML = '...';
         const user = userMap[targetUserId]; const stats = await calculateAdvancedStats(targetUserId);
 
-        sstatTotalMatch.textContent = stats.played; statTotalWin.textContent = stats.won; 
+        statTotalMatch.textContent = stats.played; statTotalWin.textContent = stats.won; 
         statTotalPointsDisplay.textContent = user ? (user.toplamPuan || 0) : 0;
         const statDoublesPointsDisplay = document.getElementById('stat-doubles-points');
         if (statDoublesPointsDisplay) {
@@ -2284,9 +2284,9 @@ submitChallengeBtn.addEventListener('click', async () => {
     if(matchResultPhotoInput) { matchResultPhotoInput.addEventListener('change', async (e) => { const file = e.target.files[0]; if(file) { const base64 = await compressAndConvertToBase64(file, 1024, 0.8); if(matchUploadPreview) { matchUploadPreview.src = base64; matchUploadPreview.style.display = 'inline-block'; } } }); }
     
     function loadMatchInteractions(matchId, matchData) {
-        const container = document.getElementById('match-interactions-container'); const myUid = auth.currentUser.uid;
-        if (matchData.durum === 'Acik_Ilan' || !matchData.oyuncu2ID) { container.style.display = 'none'; return; }
-        container.style.display = 'block';
+    const container = document.getElementById('match-interactions-container'); const myUid = auth.currentUser.uid;
+    if (matchData.durum === 'Acik_Ilan' || !matchData.oyuncu2ID) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
 
         const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1'; const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
         const pollLoading = document.getElementById('poll-loading'); const votingArea = document.getElementById('poll-voting-area'); const resultsArea = document.getElementById('poll-results-area'); const btnP1 = document.getElementById('btn-vote-p1'); const btnP2 = document.getElementById('btn-vote-p2');
