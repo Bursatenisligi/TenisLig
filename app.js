@@ -634,7 +634,13 @@ function analyzeStats(matches) {
 
         if (m.skor) {
             const s = m.skor;
-            const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp}];
+            // 💡 3. seti Süper Tie-Break (isSuper: true) olarak işaretliyoruz
+            const sets = [
+                {p1: s.s1_me, p2: s.s1_opp, isSuper: false}, 
+                {p1: s.s2_me, p2: s.s2_opp, isSuper: false}, 
+                {p1: s.s3_me, p2: s.s3_opp, isSuper: true}
+            ];
+
             sets.forEach(set => {
                 const s1 = parseInt(set.p1||0); const s2 = parseInt(set.p2||0);
                 if (s1 + s2 > 0) {
@@ -642,17 +648,35 @@ function analyzeStats(matches) {
                         if (playerStats[pid]) playerStats[pid].setsPlayed++;
                     });
 
+                    let isTieBreak = false;
+                    let team1WonTB = false;
+
+                    // 🛠️ SENARYO 1: Normal set tie-break'i (7-6 veya 6-7)
                     if ((s1 === 7 && s2 === 6) || (s1 === 6 && s2 === 7)) {
-                        let team1WonSetTB = false;
+                        isTieBreak = true;
                         if (m.macTipi === 'Turnuva') {
-                            team1WonSetTB = (s1 === 7);
+                            team1WonTB = (s1 === 7);
                         } else {
                             const reporterIsTeam1 = team1.includes(m.sonucuGirenID);
-                            if (s1 === 7) team1WonSetTB = reporterIsTeam1;
-                            else team1WonSetTB = !reporterIsTeam1;
+                            if (s1 === 7) team1WonTB = reporterIsTeam1;
+                            else team1WonTB = !reporterIsTeam1;
                         }
+                    }
+                    // 🛠️ SENARYO 2: 3. Set Karar Süper Tie-Break'i (Örn: 10-8, 10-5 vb.)
+                    else if (set.isSuper && (s1 > 0 || s2 > 0)) {
+                        isTieBreak = true;
+                        if (m.macTipi === 'Turnuva') {
+                            team1WonTB = (s1 > s2);
+                        } else {
+                            const reporterIsTeam1 = team1.includes(m.sonucuGirenID);
+                            if (s1 > s2) team1WonTB = reporterIsTeam1;
+                            else team1WonTB = !reporterIsTeam1;
+                        }
+                    }
 
-                        const tbWinningTeam = team1WonSetTB ? team1 : team2;
+                    // Eğer bu set bir tie-break ise kazanan oyuncuların hanesine +1 yaz
+                    if (isTieBreak) {
+                        const tbWinningTeam = team1WonTB ? team1 : team2;
                         tbWinningTeam.forEach(pid => {
                             if (playerStats[pid]) playerStats[pid].tieBreakWins++;
                         });
@@ -663,16 +687,10 @@ function analyzeStats(matches) {
     });
 
     let maxWins = { val: 0, p: null }; let maxMatches = { val: 0, p: null }; let maxSets = { val: 0, p: null }; let maxTB = { val: 0, p: null }; let maxStreak = { val: 0, p: null }; 
-    
-    // YENİ: Tekler ve Çiftler puan liderleri için ayrı nesneler kuruyoruz
-    let maxPointsTotal = { val: -99999, p: null };
-    let maxDoublesPointsTotal = { val: -99999, p: null };
+    let maxPointsTotal = { val: -99999, p: null }; let maxDoublesPointsTotal = { val: -99999, p: null };
     
     Object.values(userMap).forEach(u => { 
-        // Tekler liderini bul
         if((u.toplamPuan || 0) > maxPointsTotal.val) maxPointsTotal = { val: u.toplamPuan || 0, p: u.isim }; 
-        
-        // Çiftler liderini bul (Veri yoksa taban puanı 1000 kabul et)
         const dPts = u.ciftlerPuani !== undefined ? u.ciftlerPuani : 1000;
         if(dPts > maxDoublesPointsTotal.val) maxDoublesPointsTotal = { val: dPts, p: u.isim };
     });
@@ -681,7 +699,7 @@ function analyzeStats(matches) {
         if (p.wins > maxWins.val) maxWins = { val: p.wins, p: p.name };
         if (p.matches > maxMatches.val) maxMatches = { val: p.matches, p: p.name };
         if (p.setsPlayed > maxSets.val) maxSets = { val: p.setsPlayed, p: p.name };
-        if (p.tieBreakWins > maxTB.val) maxTB = { val: p.tieBreakWins, p: p.name };
+        if (p.tieBreakWins > maxTB.val) maxTB = { val: p.tieBreakWins, p: p.name }; // 💡 Burası artık kusursuz dolacak!
         if (p.history.length > 0) {
             p.history.sort((a, b) => a.time - b.time);
             let currentStreak = 0; let bestStreak = 0;
@@ -692,8 +710,6 @@ function analyzeStats(matches) {
 
     let bestCourt = { val: 0, name: '-' };
     Object.keys(courtStats).forEach(c => { if(courtStats[c] > bestCourt.val) bestCourt = { val: courtStats[c], name: c }; });
-    
-    // Nesneleri dışarıya fırlat
     return { maxPointsTotal, maxDoublesPointsTotal, maxWins, maxMatches, maxStreak, maxTB, maxSets, bestCourt };
 }
 
