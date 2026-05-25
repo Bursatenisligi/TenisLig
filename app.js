@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Dropdownları doldurma fonksiyonu
     function populateClubDropdowns() {
-        const selects = ['register-club', 'edit-club', 'leaderboard-club-filter'];
+       const selects = ['register-club', 'edit-club'];
         selects.forEach(id => {
             const el = document.getElementById(id);
             if(!el) return;
@@ -553,16 +553,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-function loadLeaderboard(filterClub = 'all') {
-        const leaderboardDiv = document.getElementById('leaderboard');
-        if(!leaderboardDiv) return;
-        leaderboardDiv.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">🏆 Sıralama güncelleniyor...</p>';
+function loadLeaderboard(filterGender = 'all') {
+    const leaderboardDiv = document.getElementById('leaderboard');
+    if(!leaderboardDiv) return;
+    leaderboardDiv.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">🏆 Sıralama güncelleniyor...</p>';
 
-        // Firestore yerine zaten yüklü olan userMap üzerinden sıralıyoruz (Çok daha hızlı)
-        let usersArray = Object.values(userMap);
-        if (filterClub !== 'all') {
-            usersArray = usersArray.filter(player => player.kulup === filterClub);
-        }
+    // Firestore yerine zaten yüklü olan userMap üzerinden sıralıyoruz (Çok daha hızlı)
+    let usersArray = Object.values(userMap);
+    if (filterGender !== 'all') {
+        usersArray = usersArray.filter(player => player.cinsiyet === filterGender);
+    }
 
         // Mod'a göre sıralama yap
         if (currentLeaderboardMode !== 'Tekler') {
@@ -2054,7 +2054,7 @@ function showNotification(msg, type='info') {
             // Mevcut kodların arasında uygun bir yere (örneğin tab-bests'ten sonraya) ekle:
             else if (targetId === 'tab-tournaments') { loadTournaments(); }
             else if (targetId === 'tab-chat') { loadChatList(); }
-            else if (targetId === 'tab-rankings') { loadLeaderboard(); }
+            else if (targetId === 'tab-rankings') { loadLeaderboard(document.getElementById('leaderboard-gender-filter').value); }
             else if (targetId === 'tab-lobby') { loadLobbyMyActions(); loadOpenRequests(); loadScheduledMatches(); loadAnnouncements(); }
             else if (targetId === 'tab-gallery') { if(galleryFilterDate) galleryFilterDate.value = ''; loadGallery(); }
             else if (targetId === 'tab-profile') {
@@ -2488,8 +2488,8 @@ function initSpamWarning() {
         document.getElementById('btn-close-profile-alert').onclick = () => { alertBox.style.display = 'none'; localStorage.setItem('tenisLigi_profileAlertDismissedTime', Date.now().toString()); };
     }
 
-    const leaderboardFilter = document.getElementById('leaderboard-club-filter');
-    if (leaderboardFilter) { leaderboardFilter.addEventListener('change', (e) => { loadLeaderboard(e.target.value); }); }
+const leaderboardGenderFilter = document.getElementById('leaderboard-gender-filter');
+if (leaderboardGenderFilter) { leaderboardGenderFilter.addEventListener('change', (e) => { loadLeaderboard(e.target.value); }); }
 
     const CURRENT_GUIDE_VERSION = 'v1_baslangic'; 
     function initOnboarding() {
@@ -4021,13 +4021,13 @@ const getPlayerFullName = (p) => {
         container.appendChild(scrollSpacer);
     };
 
-    // Filtre Butonları (Tekler/Çiftler vb)
-    const btnRankSingles = document.getElementById('btn-rank-singles');
-    const btnRankDoubles = document.getElementById('btn-rank-doubles');
-    if (btnRankSingles && btnRankDoubles) {
-        btnRankSingles.addEventListener('click', () => { currentLeaderboardMode = 'Tekler'; btnRankSingles.style.background = '#c06035'; btnRankDoubles.style.background = '#6c757d'; loadLeaderboard(document.getElementById('leaderboard-club-filter').value); });
-        btnRankDoubles.addEventListener('click', () => { currentLeaderboardMode = 'Çiftler'; btnRankSingles.style.background = '#6c757d'; btnRankDoubles.style.background = '#c06035'; loadLeaderboard(document.getElementById('leaderboard-club-filter').value); });
-    }
+// Filtre Butonları (Tekler/Çiftler vb)
+const btnRankSingles = document.getElementById('btn-rank-singles');
+const btnRankDoubles = document.getElementById('btn-rank-doubles');
+if (btnRankSingles && btnRankDoubles) {
+    btnRankSingles.addEventListener('click', () => { currentLeaderboardMode = 'Tekler'; btnRankSingles.style.background = '#c06035'; btnRankDoubles.style.background = '#6c757d'; loadLeaderboard(document.getElementById('leaderboard-gender-filter').value); });
+    btnRankDoubles.addEventListener('click', () => { currentLeaderboardMode = 'Çiftler'; btnRankSingles.style.background = '#6c757d'; btnRankDoubles.style.background = '#c06035'; loadLeaderboard(document.getElementById('leaderboard-gender-filter').value); });
+}
 
     // ============================================================================
     // ============================================================================

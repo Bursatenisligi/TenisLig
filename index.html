@@ -335,11 +335,13 @@
                 <button id="btn-rank-singles" class="btn-main" style="margin:0; background:#c06035;">Tekler Ligi 👤</button>
                 <button id="btn-rank-doubles" class="btn-main" style="margin:0; background:#6c757d;">Çiftler Ligi 👥</button>
             </div>
-            <div style="background-color: #f1f3f5; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef; position: sticky; top: 0; z-index: 10;">
-                <select id="leaderboard-club-filter" style="margin-bottom:0; width: 100%;">
-                    <option value="all">Tüm Kulüpler 🌍</option>
-                </select>
-            </div>
+        <div style="background-color: #f1f3f5; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef; position: sticky; top: 0; z-index: 10;">
+    <select id="leaderboard-gender-filter" style="margin-bottom:0; width: 100%;">
+        <option value="all">Kadınlar/Erkekler Sıralaması 🚻</option>
+        <option value="Erkek">Erkekler ♂️</option>
+        <option value="Kadın">Kadınlar ♀️</option>
+    </select>
+</div>
             <div id="leaderboard"></div>
         </div>
 
@@ -919,7 +921,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=116"></script>
+    <script src="app.js?=117"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
