@@ -623,7 +623,6 @@ function analyzeStats(matches) {
             if (playerStats[pid]) {
                 playerStats[pid].matches++;
                 
-                // Oyuncunun takımı maçı kazandı mı?
                 let isPlayerWinner = false;
                 if (team1.includes(pid) && isTeam1Winner) isPlayerWinner = true;
                 if (team2.includes(pid) && isTeam2Winner) isPlayerWinner = true;
@@ -639,37 +638,45 @@ function analyzeStats(matches) {
             sets.forEach(set => {
                 const s1 = parseInt(set.p1||0); const s2 = parseInt(set.p2||0);
                 if (s1 + s2 > 0) {
-                    // Maçtaki 4 oyuncu da bu seti oynamış kabul edilir
                     allMatchPlayers.forEach(pid => {
                         if (playerStats[pid]) playerStats[pid].setsPlayed++;
                     });
 
-                    // Tie-Break kontrolü (7-6 veya 6-7)
                     if ((s1 === 7 && s2 === 6) || (s1 === 6 && s2 === 7)) {
                         let team1WonSetTB = false;
                         if (m.macTipi === 'Turnuva') {
-                            // Turnuva maçlarında skor kutuları sabittir (p1=Takım1, p2=Takım2)
                             team1WonSetTB = (s1 === 7);
                         } else {
-                            // Normal lobi meydan okumalarında skor girene göre ayna mantığı
                             const reporterIsTeam1 = team1.includes(m.sonucuGirenID);
                             if (s1 === 7) team1WonSetTB = reporterIsTeam1;
                             else team1WonSetTB = !reporterIsTeam1;
                         }
 
-                        // Tie-break'i kazanan takımdaki tüm oyunculara +1 TB zaferi ekle
                         const tbWinningTeam = team1WonSetTB ? team1 : team2;
                         tbWinningTeam.forEach(pid => {
                             if (playerStats[pid]) playerStats[pid].tieBreakWins++;
-                            });
-                        }
+                        });
                     }
-                });
-            }
-        });
+                }
+            });
+        }
+    });
 
-    let maxWins = { val: 0, p: null }; let maxMatches = { val: 0, p: null }; let maxSets = { val: 0, p: null }; let maxTB = { val: 0, p: null }; let maxStreak = { val: 0, p: null }; let maxPointsTotal = { val: -99999, p: null };
-    Object.values(userMap).forEach(u => { if(u.toplamPuan > maxPointsTotal.val) maxPointsTotal = { val: u.toplamPuan, p: u.isim }; });
+    let maxWins = { val: 0, p: null }; let maxMatches = { val: 0, p: null }; let maxSets = { val: 0, p: null }; let maxTB = { val: 0, p: null }; let maxStreak = { val: 0, p: null }; 
+    
+    // YENİ: Tekler ve Çiftler puan liderleri için ayrı nesneler kuruyoruz
+    let maxPointsTotal = { val: -99999, p: null };
+    let maxDoublesPointsTotal = { val: -99999, p: null };
+    
+    Object.values(userMap).forEach(u => { 
+        // Tekler liderini bul
+        if((u.toplamPuan || 0) > maxPointsTotal.val) maxPointsTotal = { val: u.toplamPuan || 0, p: u.isim }; 
+        
+        // Çiftler liderini bul (Veri yoksa taban puanı 1000 kabul et)
+        const dPts = u.ciftlerPuani !== undefined ? u.ciftlerPuani : 1000;
+        if(dPts > maxDoublesPointsTotal.val) maxDoublesPointsTotal = { val: dPts, p: u.isim };
+    });
+
     Object.values(playerStats).forEach(p => {
         if (p.wins > maxWins.val) maxWins = { val: p.wins, p: p.name };
         if (p.matches > maxMatches.val) maxMatches = { val: p.matches, p: p.name };
@@ -685,46 +692,59 @@ function analyzeStats(matches) {
 
     let bestCourt = { val: 0, name: '-' };
     Object.keys(courtStats).forEach(c => { if(courtStats[c] > bestCourt.val) bestCourt = { val: courtStats[c], name: c }; });
-    return { maxPointsTotal, maxWins, maxMatches, maxStreak, maxTB, maxSets, bestCourt };
+    
+    // Nesneleri dışarıya fırlat
+    return { maxPointsTotal, maxDoublesPointsTotal, maxWins, maxMatches, maxStreak, maxTB, maxSets, bestCourt };
 }
 
-    async function loadTheBests(filterType = 'all') {
-        if (!bestsContainer) return;
-        bestsContainer.innerHTML = '<p style="width:100%; text-align:center; color:#999; margin-top:20px;">📊 İstatistikler analiz ediliyor...</p>';
-        try {
-            const snapshot = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
-            let matches = []; snapshot.forEach(doc => matches.push(doc.data()));
-            if (filterType === 'month') {
-                const now = new Date(); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                matches = matches.filter(m => { const d = m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : null); return d && d >= startOfMonth && d <= endOfMonth; });
-            }
-            const stats = analyzeStats(matches);
-            const getPhotoByName = (name) => {
-                if (!name || name === '-') return 'https://via.placeholder.com/60?text=?';
-                const user = Object.values(userMap).find(u => (u.isim || u.email) === name);
-                return user && user.fotoURL ? user.fotoURL : getSafeAvatar(name);
-            };
-            const createBestCard = (type, icon, label, value, playerName) => {
-                const photoURL = getPhotoByName(playerName);
-                let colorClass = "best-accent-blue"; if (type === 'gold') colorClass = "best-accent-gold"; if (type === 'fire') colorClass = "best-accent-fire"; if (type === 'green') colorClass = "best-accent-green";
-                return `<div class="best-card-modern"><div class="best-card-header ${colorClass}"><span class="best-card-icon">${icon}</span><span class="best-card-label">${label}</span></div><div class="best-card-body"><div class="best-card-value">${value}</div><div class="best-player-row"><img src="${photoURL}" class="best-avatar"><div class="best-player-name">${playerName || '-'}</div></div></div></div>`;
-            };
-            let legendTitle = "Ligin Efsanesi"; let legendVal = stats.maxPointsTotal.val + " Puan"; let legendName = stats.maxPointsTotal.p;
-            if (filterType === 'month') { legendTitle = "Ayın Lideri"; legendVal = stats.maxWins.val + " Galibiyet"; legendName = stats.maxWins.p; }
+   async function loadTheBests(filterType = 'all') {
+    if (!bestsContainer) return;
+    bestsContainer.innerHTML = '<p style="width:100%; text-align:center; color:#999; margin-top:20px;">📊 İstatistikler analiz ediliyor...</p>';
+    try {
+        const snapshot = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+        let matches = []; snapshot.forEach(doc => matches.push(doc.data()));
+        if (filterType === 'month') {
+            const now = new Date(); const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            matches = matches.filter(m => { const d = m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : null); return d && d >= startOfMonth && d <= endOfMonth; });
+        }
+        const stats = analyzeStats(matches);
+        const getPhotoByName = (name) => {
+            if (!name || name === '-') return 'https://via.placeholder.com/60?text=?';
+            const user = Object.values(userMap).find(u => (u.isim || u.email) === name);
+            return user && user.fotoURL ? user.fotoURL : getSafeAvatar(name);
+        };
+        const createBestCard = (type, icon, label, value, playerName) => {
+            const photoURL = getPhotoByName(playerName);
+            let colorClass = "best-accent-blue"; if (type === 'gold') colorClass = "best-accent-gold"; if (type === 'fire') colorClass = "best-accent-fire"; if (type === 'green') colorClass = "best-accent-green";
+            return `<div class="best-card-modern"><div class="best-card-header ${colorClass}"><span class="best-card-icon">${icon}</span><span class="best-card-label">${label}</span></div><div class="best-card-body"><div class="best-card-value">${value}</div><div class="best-player-row"><img src="${photoURL}" class="best-avatar"><div class="best-player-name">${playerName || '-'}</div></div></div></div>`;
+        };
+        
+        // --- YENİ DÜZENLEME: FİLTREYE GÖRE ALTIN KARTLARI AYARLA ---
+        let legendCardsHTML = "";
+        if (filterType === 'month') {
+            // Aylık filtrelemede o ayın en çok galibiyet alanını bas
+            legendCardsHTML = createBestCard('gold', '👑', "Ayın Lideri", stats.maxWins.val + " Galibiyet", stats.maxWins.p);
+        } else {
+            // Genel filtrelemede hem tekler hem çiftler liderini yan yana bas
+            legendCardsHTML = `
+                ${createBestCard('gold', '👑', "Tekler Efsanesi", stats.maxPointsTotal.val + " Puan", stats.maxPointsTotal.p)}
+                ${createBestCard('gold', '👥', "Çiftler Efsanesi", stats.maxDoublesPointsTotal.val + " Puan", stats.maxDoublesPointsTotal.p)}
+            `;
+        }
 
-            bestsContainer.innerHTML = `
-                ${createBestCard('gold', '👑', legendTitle, legendVal, legendName)}
-                ${createBestCard('fire', '🔥', 'Yenilmezlik Serisi', stats.maxStreak.val + " Maç", stats.maxStreak.p)}
-                ${createBestCard('green', '🦾', 'Galibiyet Makinesi', stats.maxWins.val + " Galibiyet", stats.maxWins.p)}
-                ${createBestCard('blue', '🏃', 'Maratoncu', stats.maxMatches.val + " Maç", stats.maxMatches.p)}
-                ${createBestCard('blue', '🧱', 'Tie-Break Kralı', stats.maxTB.val + " TB Zaferi", stats.maxTB.p)}
-                ${createBestCard('blue', '🥵', 'Set Canavarı', stats.maxSets.val + " Set", stats.maxSets.p)}
-                <div class="best-card-modern" style="grid-column: span 2;">
-                    <div class="best-card-header best-accent-gray"><span class="best-card-icon">📍</span><span class="best-card-label">En Popüler Kort</span></div>
-                    <div class="best-card-body" style="flex-direction:row; justify-content:space-between; padding: 15px;"><div class="best-card-value" style="font-size:1.2em;">${stats.bestCourt.name}</div><div style="font-weight:bold; color:#777;">${stats.bestCourt.val} Maç</div></div>
-                </div>`;
-        } catch (error) { bestsContainer.innerHTML = '<p style="text-align:center; color:red;">Veriler yüklenemedi.</p>'; }
-    }
+        bestsContainer.innerHTML = `
+            ${legendCardsHTML}
+            ${createBestCard('fire', '🔥', 'Yenilmezlik Serisi', stats.maxStreak.val + " Maç", stats.maxStreak.p)}
+            ${createBestCard('green', '🦾', 'Galibiyet Makinesi', stats.maxWins.val + " Galibiyet", stats.maxWins.p)}
+            ${createBestCard('blue', '🏃', 'Maratoncu', stats.maxMatches.val + " Maç", stats.maxMatches.p)}
+            ${createBestCard('blue', '🧱', 'Tie-Break Kralı', stats.maxTB.val + " TB Zaferi", stats.maxTB.p)}
+            ${createBestCard('blue', '🥵', 'Set Canavarı', stats.maxSets.val + " Set", stats.maxSets.p)}
+            <div class="best-card-modern" style="grid-column: span 2;">
+                <div class="best-card-header best-accent-gray"><span class="best-card-icon">📍</span><span class="best-card-label">En Popüler Kort</span></div>
+                <div class="best-card-body" style="flex-direction:row; justify-content:space-between; padding: 15px;"><div class="best-card-value" style="font-size:1.2em;">${stats.bestCourt.name}</div><div style="font-weight:bold; color:#777;">${stats.bestCourt.val} Maç</div></div>
+            </div>`;
+    } catch (error) { bestsContainer.innerHTML = '<p style="text-align:center; color:red;">Veriler yüklenemedi.</p>'; }
+}
 
     function loadGallery() {
         if (!galleryGrid) return;
@@ -1986,6 +2006,15 @@ function showNotification(msg, type='info') {
                 initSpamWarning(); 
                 initOnboarding(); 
                 checkProfileCompleteness();
+                checkAndSendDailyOpenAdsSummary();
+                checkAndSendDailyMatchesSummary();
+                checkAndSendDailyPendingApprovalsSummary();
+                checkAndSendDailyLeaderboardSummary();
+                
+                initSpamWarning(); 
+                initOnboarding(); 
+                checkProfileCompleteness();
+            
             }).catch(err => console.error("Veriler yüklenirken hata:", err));
 
         } else { 
@@ -2194,27 +2223,37 @@ submitChallengeBtn.addEventListener('click', async () => {
             if (wp > op.toplamPuan * 0.5) return alert("Bu bahis miktarı rakibin puan limitini aşıyor.");
         }
         
-        try {
-            // --- EKLENEN YENİ ALANLAR (macFormati, oyuncu1PartnerID, oyuncu2PartnerID) ---
-            await db.collection('matches').add({ 
+try {
+            // Düzenli veri nesnesi oluşturuluyor
+            const challengeData = {
                 oyuncu1ID: auth.currentUser.uid, 
                 oyuncu1PartnerID: format !== 'Tekler' ? partnerID : null,
                 oyuncu2ID: oid, 
-                oyuncu2PartnerID: null, // Rakip maçı kabul ederken kendi partnerini seçecek
+                oyuncu2PartnerID: null, 
                 macFormati: format,
                 macTipi: mt, 
                 bahisPuani: wp || 0, 
-                durum: 'Bekliyor', 
+                durum: 'Bekliyor'
+            };
+
+            // --- Veritabanı Kaydı ---
+            await db.collection('matches').add({ 
+                ...challengeData,
                 tarih: firebase.firestore.FieldValue.serverTimestamp(), 
                 kayitliKazananID: null 
             });
             
+            // --- [YENİ]: WHATSAPP GRUP DUYURUSU TETİKLEME ---
+            if (typeof window.sendWhatsAppSpecificChallengeNotification === 'function') {
+                await window.sendWhatsAppSpecificChallengeNotification(challengeData);
+            }
+            
+            // --- Mevcut E-Posta Gönderim Yapısı (Aynen Korundu) ---
             const senderName = me.isim || 'Bir oyuncu'; const mailSubject = "⚔️ Meydan Okuma Geldi!";
-            // Maile format bilgisini de ekledik
             const mailBody = `<p><strong>${senderName}</strong> sana özel bir maç teklifi gönderdi.</p><div style="background-color:#fff3cd; padding:10px; border-radius:5px; border:1px solid #ffeeba; margin:10px 0;"><p><strong>Maç Tipi:</strong> ${mt}</p><p><strong>Format:</strong> ${format}</p><p><strong>Bahis:</strong> ${wp || 0} Puan</p></div><p>Teklifi kabul etmek veya reddetmek için uygulamaya aşağıdaki adresten gidebilirsin:</p><p><a href="https://bursatenisligi.github.io/TenisLig/">https://bursatenisligi.github.io/TenisLig/</a></p>`;
             sendNotificationEmail(oid, mailSubject, mailBody);
             
-            alert("Teklif başarıyla gönderildi! Rakibine mail ile haber verildi. 📨"); challengeForm.style.display = 'none'; document.querySelector('[data-target="tab-matches"]').click();
+            alert("Teklif başarıyla gönderildi, rakibe mail atıldı ve WhatsApp grubuna düello duyurusu fırlatıldı! 🔥📨"); challengeForm.style.display = 'none'; document.querySelector('[data-target="tab-matches"]').click();
         } catch (error) { console.error("Teklif gönderme hatası:", error); alert("Bir hata oluştu: " + error.message); }
     });
 
@@ -2240,31 +2279,41 @@ submitChallengeBtn.addEventListener('click', async () => {
         const me = userMap[auth.currentUser.uid];
         if (mt === 'Meydan Okuma') { if (me.toplamPuan < 0) return alert("Puanın eksiye düştüğü için bahisli ilan açamazsın."); if (wp > me.toplamPuan * 0.5) return alert("Maksimum bahis toplam puanının yarısı olabilir."); }
         
-        try {
-            // --- EKLENEN YENİ ALANLAR (macFormati, oyuncu1PartnerID, oyuncu2PartnerID) ---
-            await db.collection('matches').add({ 
-                oyuncu1ID: auth.currentUser.uid, 
-                oyuncu1PartnerID: format !== 'Tekler' ? partnerID : null,
-                oyuncu2ID: null, 
-                oyuncu2PartnerID: null,
-                macFormati: format,
-                macTipi: mt, 
-                bahisPuani: wp || 0, 
-                durum: 'Acik_Ilan', 
-                tarih: firebase.firestore.FieldValue.serverTimestamp(), 
-                kayitliKazananID: null, 
-                allowedLeagues: allowedLeagues 
-            });
-            
-            const myName = me.isim || 'Bir oyuncu'; const leagueText = allowedLeagues.join(', ');
-            const subject = "📢 Yeni Kort İlanı!";
-            // Maile format bilgisini de ekledik
-            const body = `<p><strong>${myName}</strong> herkese açık bir maç ilanı oluşturdu!</p><div style="background-color:#f8f9fa; padding:10px; border-left:4px solid #28a745; margin:10px 0;"><p><strong>Maç Tipi:</strong> ${mt}</p><p><strong>Format:</strong> ${format}</p><p><strong>Bahis:</strong> ${wp || 0} Puan</p><p><strong>Kabul Edebilen Ligler:</strong> ${leagueText}</p></div><p>Kendine güveniyorsan hemen uygulamaya girip ilanı kabul et:</p><p><a href="https://bursatenisligi.github.io/TenisLig/">https://bursatenisligi.github.io/TenisLig/</a></p>`;
-            const allUserIds = Object.keys(userMap);
-            allUserIds.forEach(uid => { if (uid !== auth.currentUser.uid) { sendNotificationEmail(uid, subject, body); } });
-            
-            alert("İlan başarıyla yayınlandı ve oyunculara mail gönderildi! 📢"); createAdForm.style.display = 'none'; loadOpenRequests(); document.querySelector('[data-target="tab-lobby"]').click(); 
-        } catch (error) { console.error("İlan oluşturma hatası:", error); alert("Hata oluştu: " + error.message); }
+    try {
+                // Veri tabanına kaydedilecek ana veriler
+                const adData = {
+                    oyuncu1ID: auth.currentUser.uid, 
+                    oyuncu1PartnerID: format !== 'Tekler' ? partnerID : null,
+                    oyuncu2ID: null, 
+                    oyuncu2PartnerID: null,
+                    macFormati: format,
+                    macTipi: mt, 
+                    bahisPuani: wp || 0, 
+                    durum: 'Acik_Ilan',
+                    allowedLeagues: allowedLeagues
+                };
+
+                // --- Veritabanı Kaydı ---
+                await db.collection('matches').add({ 
+                    ...adData,
+                    tarih: firebase.firestore.FieldValue.serverTimestamp(), 
+                    kayitliKazananID: null 
+                });
+                
+                // --- [YENİ]: WHATSAPP GRUP DUYURUSU TETİKLEME ---
+                if (typeof window.sendWhatsAppOpenAdNotification === 'function') {
+                    await window.sendWhatsAppOpenAdNotification(adData);
+                }
+                
+                // --- Mevcut E-Posta Gönderim Döngün (Aynen Korundu) ---
+                const myName = me.isim || 'Bir oyuncu'; const leagueText = allowedLeagues.join(', ');
+                const subject = "📢 Yeni Kort İlanı!";
+                const body = `<p><strong>${myName}</strong> herkese açık bir maç ilanı oluşturdu!</p><div style="background-color:#f8f9fa; padding:10px; border-left:4px solid #28a745; margin:10px 0;"><p><strong>Maç Tipi:</strong> ${mt}</p><p><strong>Format:</strong> ${format}</p><p><strong>Bahis:</strong> ${wp || 0} Puan</p><p><strong>Kabul Edebilen Ligler:</strong> ${leagueText}</p></div><p>Kendine güveniyorsan hemen uygulamaya girip ilanı kabul et:</p><p><a href="https://bursatenisligi.github.io/TenisLig/">https://bursatenisligi.github.io/TenisLig/</a></p>`;
+                const allUserIds = Object.keys(userMap);
+                allUserIds.forEach(uid => { if (uid !== auth.currentUser.uid) { sendNotificationEmail(uid, subject, body); } });
+                
+                alert("İlan başarıyla yayınlandı, e-postalar gönderildi ve WhatsApp grubuna duyuruldu! 📢"); createAdForm.style.display = 'none'; loadOpenRequests(); document.querySelector('[data-target="tab-lobby"]').click(); 
+            } catch (error) { console.error("İlan oluşturma hatası:", error); alert("Hata oluştu: " + error.message); }
     });
 
     if(applyFiltersBtn) applyFiltersBtn.addEventListener('click', () => loadMatchesForFixture());
@@ -2387,11 +2436,25 @@ submitChallengeBtn.addEventListener('click', async () => {
     }
     const btnDeleteAccount = document.getElementById('btn-delete-account'); if(btnDeleteAccount) { btnDeleteAccount.addEventListener('click', deleteAccount); }
 
-    function initSpamWarning() {
-        const alertBox = document.getElementById('email-spam-alert'); const closeBtn = document.getElementById('btn-close-spam-alert');
-        const isDismissed = localStorage.getItem('tenisLigi_spamAlertDismissed');
-        if (!isDismissed && alertBox) { alertBox.style.display = 'flex'; setTimeout(() => { if(alertBox) alertBox.style.display = 'none'; }, 5000); }
-        if (closeBtn) { closeBtn.addEventListener('click', function() { if(alertBox) alertBox.style.display = 'none'; localStorage.setItem('tenisLigi_spamAlertDismissed', 'true'); }); }
+function initSpamWarning() {
+        const alertBox = document.getElementById('email-spam-alert'); 
+        const closeBtn = document.getElementById('btn-close-spam-alert');
+        
+        // 💡 Yeni anahtar sayesinde eski kutuyu kapatanlar da bu daveti ilk kez görecek
+        const isDismissed = localStorage.getItem('tenisLigi_whatsappInviteDismissed');
+        
+        if (!isDismissed && alertBox) { 
+            alertBox.style.display = 'flex'; 
+            // 💡 5 saniyelik otomatik gizleme (setTimeout) kaldırılarak banner kalıcı yapıldı
+        }
+        
+        if (closeBtn) { 
+            closeBtn.addEventListener('click', function(e) { 
+                e.stopPropagation(); // 💡 Çarpıya basıldığında arkadaki linkin açılmasını engeller
+                if(alertBox) alertBox.style.display = 'none'; 
+                localStorage.setItem('tenisLigi_whatsappInviteDismissed', 'true'); 
+            }); 
+        }
     }
 
     function checkProfileCompleteness() {
@@ -3480,91 +3543,6 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
 
     // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
 // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
-    window.finalizeMatch = async function(id, m) {
-        const batch = db.batch(); 
-        const wid = m.adayKazananID; 
-        const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
-
-        let wPartnerId = null; let lPartnerId = null;
-        if (!(m.macFormati || '').includes('Tekler')) {
-            wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
-            lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
-        }
-
-        let wg = 0, lg = 0;
-        if(m.skor) {
-            const s = m.skor; 
-            if (m.macTipi === 'Turnuva') {
-                const p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0);
-                const p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0);
-                if (m.oyuncu1ID === wid) { wg = p1G; lg = p2G; } else { wg = p2G; lg = p1G; }
-            } else {
-                const isEntryByWinner = m.sonucuGirenID === wid;
-                const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0); 
-                const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0); 
-                const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0); 
-                const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
-                wg = s1w + s2w; lg = s1l + s2l;
-            }
-        }
-        const bonusW = wg * 5; const bonusL = lg * 5;
-
-        let winPoints = 50 + bonusW; let losePoints = 50 + bonusL; 
-        if(m.macTipi === 'Meydan Okuma') { winPoints = m.bahisPuani + bonusW; losePoints = -m.bahisPuani + bonusL; }
-
-        const updateStats = (uid, isWin) => {
-            if(!uid) return;
-            const ref = db.collection('users').doc(uid);
-            const pts = isWin ? winPoints : losePoints;
-            const gInc = isWin ? 1 : 0;
-            
-            if (!(m.macFormati || '').includes('Tekler')) {
-                const uData = userMap[uid] || {};
-                const currentCiftler = uData.ciftlerPuani !== undefined ? uData.ciftlerPuani : 1000;
-                batch.update(ref, { 
-                    ciftlerPuani: currentCiftler + pts,
-                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc),
-                    macSayisi: firebase.firestore.FieldValue.increment(1)
-                });
-            } else {
-                batch.update(ref, { 
-                    toplamPuan: firebase.firestore.FieldValue.increment(pts), 
-                    galibiyetSayisi: firebase.firestore.FieldValue.increment(gInc), 
-                    macSayisi: firebase.firestore.FieldValue.increment(1) 
-                });
-            }
-        };
-
-        updateStats(wid, true); updateStats(lid, false);
-        if (!(m.macFormati || '').includes('Tekler')) { updateStats(wPartnerId, true); updateStats(lPartnerId, false); }
-
-        const matchRef = db.collection('matches').doc(id);
-        batch.update(matchRef, { durum: 'Tamamlandı', kayitliKazananID: wid });
-
-        try {
-            await batch.commit();
-            
-            if (m.tournamentId && m.matchTag) {
-                if (typeof window.advanceTournamentBracket === 'function') {
-                    await window.advanceTournamentBracket(m.tournamentId, m.matchTag, wid);
-                }
-            }
-            
-            // YENİ: PARTNERLERE DE ROZET VER
-            const badgeFunc = window.checkAndGrantBadges || checkAndGrantBadges;
-            if (typeof badgeFunc === 'function') {
-                await badgeFunc(wid); await badgeFunc(lid);
-                if (wPartnerId) await badgeFunc(wPartnerId);
-                if (lPartnerId) await badgeFunc(lPartnerId);
-            }
-
-            alert("✅ Maç onaylandı ve puanlar/rozetler doğru haneye işlendi!"); 
-            if (typeof confetti === 'function') { confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#c06035', '#ffffff', '#28a745'] }); }
-            if (typeof goBackToList === 'function') goBackToList(); 
-            if (typeof loadLeaderboard === 'function') loadLeaderboard();
-        } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
-    };
-
     // --- 3. MAÇ ONAYLAMA VE PUAN DAĞITIM MOTORU ---
     window.finalizeMatch = async function(id, m) {
         const batch = db.batch(); 
@@ -3627,10 +3605,16 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         try {
             await batch.commit();
             
-            // BURADA GLOBAL 'window.' ÖNEKİ İLE ÇAĞIRIYORUZ (Hatanın Çözümü)
+            // SENARYO A: EĞER TURNUVA MAÇIYSA (Ağacı/Fikstürü İlerletir ve Turnuva Bildirimini Atar)
             if (m.tournamentId && m.matchTag) {
                 if (typeof window.advanceTournamentBracket === 'function') {
                     await window.advanceTournamentBracket(m.tournamentId, m.matchTag, wid);
+                }
+            }
+            // SENARYO B: [YENİ] EĞER NORMAL MAÇSA (Özel Meydan Okuma veya Açık İlan Sonu)
+            else {
+                if (typeof window.sendWhatsAppRegularMatchResultNotification === 'function') {
+                    await window.sendWhatsAppRegularMatchResultNotification(m);
                 }
             }
             
@@ -3645,7 +3629,6 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
             if (typeof loadLeaderboard === 'function') loadLeaderboard();
         } catch (error) { console.error("Onay Hatası:", error); alert("Hata oluştu: " + error.message); }
     };
-
     window.generateKnockoutDraw = async function(tourId, isDirect = true) {
         if (!confirm("Kura çekilecek ve gerçek maç dökümanları oluşturulacak. Onaylıyor musunuz?")) return;
         try {
@@ -5046,5 +5029,488 @@ window.generateAutoTeams = async function(tourId) {
     }).catch(err => {
         showMatchDetail(firestoreMatchId);
     });
+    window.sendWhatsAppOpenAdNotification = async function(adData) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        const creatorName = userMap[adData.oyuncu1ID]?.isim || 'Bir Oyuncu';
+        let team1Name = creatorName;
+        if (adData.oyuncu1PartnerID && userMap[adData.oyuncu1PartnerID]) {
+            team1Name += ` & ${userMap[adData.oyuncu1PartnerID].isim}`;
+        }
+
+        const leagueText = adData.allowedLeagues ? adData.allowedLeagues.join(', ') : 'Tüm Ligler';
+        const typeText = adData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı Meydan Okuma (*${adData.bahisPuani} Puan*)` : '🤝 Dostluk Maçı';
+
+        const messageText = 
+            `📢 *YENİ KORT İLANI YAYINLANDI!* 📢\n\n` +
+            `🎾 *İlan Sahibi:* ${team1Name}\n` +
+            `⚔️ *Maç Tipi:* ${typeText}\n` +
+            `👥 *Format:* ${adData.macFormati || 'Tekler'}\n` +
+            `🛡️ *Kabul Edebilen Ligler:* ${leagueText}\n\n` +
+            `🎯 _Kendine güvenen raketler hemen uygulamaya girip lobi üzerinden ilanı kabul edebilir ve maç planlamasını başlatabilir! Herkese iyi maçlar!_ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Açık ilan WhatsApp bildirimi başarıyla gruba gönderildi! 🚀");
+        } catch (error) { console.error("💥 WhatsApp ilan bildirimi atılırken ağ hatası:", error); }
+    };
+
+    // --- 10. ÖZEL MEYDAN OKUMA GÖNDERİLDİĞİNDE GRUBA DUYURU ATAN MOTOR ---
+    window.sendWhatsAppSpecificChallengeNotification = async function(challengeData) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        const senderName = userMap[challengeData.oyuncu1ID]?.isim || 'Bir Oyuncu';
+        let team1Name = senderName;
+        if (challengeData.oyuncu1PartnerID && userMap[challengeData.oyuncu1PartnerID]) {
+            team1Name += ` & ${userMap[challengeData.oyuncu1PartnerID].isim}`;
+        }
+
+        const targetName = userMap[challengeData.oyuncu2ID]?.isim || 'Rakip Oyuncu';
+        const typeText = challengeData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı Meydan Okuma (*${challengeData.bahisPuani} Puan*)` : '🤝 Dostluk Maçı';
+
+        const messageText = 
+            `⚔️ *KORTLARDA DÜELLO ALARMI!* ⚔️\n\n` +
+            `🔥 Ligimizde tansiyon yükseliyor! Bir takımımız doğrudan gözüne kestirdiği rakibine özel bir davet gönderdi.\n\n` +
+            `👤 *Meydan Okuyan:* ${team1Name}\n` +
+            `🎯 *Meydan Okunan (Hedef):* ${targetName}\n` +
+            `⚙️ *Maç Tipi:* ${typeText}\n` +
+            `👥 *Format:* ${challengeData.macFormati || 'Tekler'}\n\n` +
+            `👉 _Bakalım bu iddialı davet kabul görecek mi? Teklifin durumunu ve planlama detaylarını uygulamadaki Maç Akışı sekmesinden takip edebilirsiniz!_ 🎾`;
+
+        try {
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            if (response.ok) console.log("Özel meydan okuma WhatsApp bildirimi başarıyla gruba gönderildi! 🚀");
+        } catch (error) { console.error("💥 WhatsApp düello bildirimi atılırken ağ hatası:", error); }
+    };
+    // --- 11. NORMAL LOBİ MAÇLARI BİTTİĞİNDE GRUBA SONUÇ DUYURUSU ATAN MOTOR ---
+    window.sendWhatsAppRegularMatchResultNotification = async function(matchData) {
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; // Canlı grup ID'niz
+
+        try {
+            const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1';
+            const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
+            
+            // Tekler veya Çiftler için takım isimlerini oluştur
+            let team1 = p1Name; 
+            if (matchData.oyuncu1PartnerID && userMap[matchData.oyuncu1PartnerID]) {
+                team1 += ` & ${userMap[matchData.oyuncu1PartnerID].isim}`;
+            }
+            let team2 = p2Name; 
+            if (matchData.oyuncu2PartnerID && userMap[matchData.oyuncu2PartnerID]) {
+                team2 += ` & ${userMap[matchData.oyuncu2PartnerID].isim}`;
+            }
+
+            // Skor metnini biçimlendir
+            const s = matchData.skor || {};
+            let scoreStr = `${s.s1_me || 0}-${s.s1_opp || 0}, ${s.s2_me || 0}-${s.s2_opp || 0}`;
+            if (s.s3_me || s.s3_opp) scoreStr += `, ${s.s3_me || 0}-${s.s3_opp || 0}`;
+
+            // Kazanan tarafı belirle
+            const winnerUid = matchData.adayKazananID;
+            const isTeam1Winner = (winnerUid === matchData.oyuncu1ID || winnerUid === matchData.oyuncu1PartnerID);
+            const winnerName = isTeam1Winner ? team1 : team2;
+
+            let matchTypeDetail = matchData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı Meydan Okuma (*${matchData.bahisPuani} Puan*)` : '🤝 Dostluk Maçı';
+            
+            const messageText = 
+                `🏁 *LİG MAÇ SONUCU TESCİLLENDİ!* 🏁\n\n` +
+                `⚙️ *Maç Türü:* ${matchTypeDetail}\n` +
+                `👥 *Format:* ${matchData.macFormati || 'Tekler'}\n` +
+                `⚔️ *Mücadele:* ${team1}  *VS* ${team2}\n` +
+                `🍏 *Skor:* ${scoreStr}\n\n` +
+                `🎉 Karşılaşmayı kazanarak puanları hanesine yazdıran taraf: *${winnerName}* 🥳🎾\n\n` +
+                `👉 _Güncel sıralamayı görmek ve yeni meydan okumalar başlatmak için hemen uygulamaya giriş yapabilirsiniz!_`;
+
+            await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+            console.log("Normal maç sonucu WhatsApp grubuyla başarıyla paylaşıldı! 🚀");
+        } catch (error) { console.error("💥 Normal maç sonucu WhatsApp duyuru hatası:", error); }
+    };
+    // --- 12. HER GÜN SADECE 1 KERE ÇALIŞAN GÜNLÜK AÇIK İLANLAR ÖZET MOTORU ---
+    window.checkAndSendDailyOpenAdsSummary = async function() {
+        console.log("Günlük açık ilan kontrolü yapılıyor...");
+        const now = new Date();
+        // Bugünün tarihini YYYY-MM-DD formatında al (Örn: 2026-05-25)
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        try {
+            // Günde sadece 1 kere atılması için Firestore'da kilit dökümanını kontrol et
+            const statusRef = db.collection('system_status').doc('whatsapp_daily_summary');
+            const statusSnap = await statusRef.get();
+            
+            if (statusSnap.exists && statusSnap.data().lastSentDate === todayStr) {
+                console.log("Bugünün açık ilanlar özeti zaten WhatsApp grubuna gönderilmiş. ⏩");
+                return; 
+            }
+
+            // Bekleyen tüm açık ilanları çek
+            const snapshot = await db.collection('matches')
+                .where('durum', '==', 'Acik_Ilan')
+                .orderBy('tarih', 'desc')
+                .get();
+
+            // Eğer hiç açık ilan yoksa, grubu boş mesajla yormayalım ama tarihi güncelleyelim ki sürekli sorgu atmasın
+            if (snapshot.empty) {
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Aktif açık ilan bulunamadı, kilit tarihi güncellendi.");
+                return;
+            }
+
+            let adsText = "";
+            let count = 1;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const p1Name = userMap[data.oyuncu1ID]?.isim || 'Bilinmeyen Oyuncu';
+                let teamName = p1Name;
+                if (data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
+                    teamName += ` & ${userMap[data.oyuncu1PartnerID].isim}`;
+                }
+
+                const typeText = data.macTipi === 'Meydan Okuma' ? `🏆 Puanlı (*${data.bahisPuani} P*)` : '🤝 Dostluk';
+                const leagues = data.allowedLeagues ? data.allowedLeagues.join(', ') : 'Tüm Ligler';
+                const format = data.macFormati || 'Tekler';
+
+                adsText += `${count}️⃣ *${teamName}*\n`;
+                adsText += `   Format: _${format}_ • Tür: _${typeText}_\n`;
+                adsText += `   Kabul Eden Ligler: _${leagues}_\n\n`;
+                count++;
+            });
+
+            const WA_API_URL = "https://7107.api.greenapi.com"; 
+            const WA_INSTANCE_ID = "7107628348";                
+            const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+            const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+            const messageText = 
+                `📋 *KORTLARDA RAKİP BEKLEYEN AÇIK İLANLAR* 📋\n\n` +
+                `🎾 Bugün ligimizde aktif olan ve meydan okumanızı bekleyen güncel kort ilanları aşağıdadır:\n\n` +
+                adsText +
+                `🎯 _Kendine güvenen raketler hemen uygulamaya girip Lobi üzerinden dilediği ilanı kabul edebilir!_ \n\n` +
+                `👉 _Uygulamaya Git:_ https://bursatenisligi.github.io/TenisLig/`;
+
+            // WhatsApp'a mesajı fırlat
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+
+            if (response.ok) {
+                // Gönderim başarılıysa kilidi bugünün tarihine ayarla
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Günlük toplu ilan özeti WhatsApp grubuna başarıyla uçuruldu! 🚀");
+            }
+        } catch (error) {
+            console.error("💥 Günlük açık ilan özeti atılırken hata oluştu:", error);
+        }
+    };
+    // --- 13. GÜNDE SADECE 1 KERE ÇALIŞAN GÜNLÜK YAKLAŞAN MAÇLAR (TURNUVA HARİÇ) ÖZET MOTORU ---
+    window.checkAndSendDailyMatchesSummary = async function() {
+        console.log("Günlük yaklaşan maç kontrolü yapılıyor...");
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        try {
+            // Günde sadece 1 kere atılması için Firestore'da kilit dökümanını kontrol et
+            const statusRef = db.collection('system_status').doc('whatsapp_daily_matches_summary');
+            const statusSnap = await statusRef.get();
+            
+            if (statusSnap.exists && statusSnap.data().lastSentDate === todayStr) {
+                console.log("Bugünün yaklaşan maçlar takvimi zaten WhatsApp grubuna gönderilmiş. ⏩");
+                return; 
+            }
+
+            // Durumu 'Hazır' (Oynanacak) olan tüm maçları çek
+            const snapshot = await db.collection('matches')
+                .where('durum', '==', 'Hazır')
+                .get();
+
+            let matchesText = "";
+            let count = 1;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                
+                // 💡 TURNUVA MAÇLARINI KESİNLİKLE HARİÇ TUT
+                if (data.macTipi === 'Turnuva') return; 
+
+                const p1Name = userMap[data.oyuncu1ID]?.isim || 'Oyuncu 1';
+                const p2Name = userMap[data.oyuncu2ID]?.isim || 'Oyuncu 2';
+                
+                // Tekler mi Çiftler mi kontrol edip takım isimlerini biçimlendir
+                let team1Name = p1Name;
+                if (data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
+                    team1Name += ` & ${userMap[data.oyuncu1PartnerID].isim}`;
+                }
+                let team2Name = p2Name;
+                if (data.oyuncu2PartnerID && userMap[data.oyuncu2PartnerID]) {
+                    team2Name += ` & ${userMap[data.oyuncu2PartnerID].isim}`;
+                }
+
+                // Kort ve Zaman bilgisini hazırla
+                let location = data.macYeri || 'Kort / Tarih Planlanıyor 📅';
+                let timeStr = '';
+                if (data.macZamani) {
+                    timeStr = data.macZamani.toDate().toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+                }
+
+                const typeText = data.macTipi === 'Meydan Okuma' ? `🏆 Puanlı (*${data.bahisPuani} P*)` : '🤝 Dostluk';
+                const format = data.macFormati || 'Tekler';
+
+                matchesText += `${count}️⃣ *${team1Name}* VS  *${team2Name}*\n`;
+                if (data.macZamani) {
+                    matchesText += `   📅 _${timeStr}_\n`;
+                    matchesText += `   📍 Kort: _${location}_\n`;
+                } else {
+                    matchesText += `   ⏳ _${location}_\n`;
+                }
+                matchesText += `   ⚙️ Format: _${format}_ • Tür: _${typeText}_\n\n`;
+                count++;
+            });
+
+            // Turnuva dışı yaklaşan maç yoksa grubu boş mesajla yormayalım
+            if (matchesText === "") {
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Turnuva dışı aktif yaklaşan maç bulunamadı, kilit tarihi güncellendi.");
+                return;
+            }
+
+            const WA_API_URL = "https://7107.api.greenapi.com"; 
+            const WA_INSTANCE_ID = "7107628348";                
+            const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+            const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+            const messageText = 
+                `📅 *GÜNLÜK LİG MAÇLARI TAKVİMİ* 📅\n\n` +
+                `🎾 Ligimizde oynanacak olan güncel dostluk ve resmi meydan okuma karşılaşmaları şu şekildedir:\n\n` +
+                matchesText +
+                `👉 _Maç konumlarına göz atmak, skor girmek veya takvimi incelemek için uygulamayı ziyaret edebilirsiniz._ \n\n` +
+                `👉 _Uygulamaya Git:_ https://bursatenisligi.github.io/TenisLig/`;
+
+            // WhatsApp'a toplu mesajı gönder
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+
+            if (response.ok) {
+                // Kilidi bugünün tarihine set et
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Günlük yaklaşan maçlar özeti WhatsApp grubuna başarıyla gönderildi! 🚀");
+            }
+        } catch (error) {
+            console.error("💥 Günlük yaklaşan maçlar özeti gönderilirken hata:", error);
+        }
+    };
+    // --- 14. GÜNDE SADECE 1 KERE ÇALIŞAN ONAY BEKLEYEN MAÇLAR ÖZET MOTORU ---
+    window.checkAndSendDailyPendingApprovalsSummary = async function() {
+        console.log("Günlük onay bekleyen maç kontrolü yapılıyor...");
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        try {
+            // Günde sadece 1 kere gönderilmesi için Firestore kilidini kontrol et
+            const statusRef = db.collection('system_status').doc('whatsapp_daily_approvals_summary');
+            const statusSnap = await statusRef.get();
+            
+            if (statusSnap.exists && statusSnap.data().lastSentDate === todayStr) {
+                console.log("Bugünün onay bekleyen maçlar takvimi zaten WhatsApp grubuna gönderilmiş. ⏩");
+                return; 
+            }
+
+            // Durumu 'Sonuç_Bekleniyor' olan tüm maçları çek
+            const snapshot = await db.collection('matches')
+                .where('durum', '==', 'Sonuç_Bekleniyor')
+                .get();
+
+            if (snapshot.empty) {
+                // Maç yoksa bile kilidi güncelle ki gün boyu boşuna sorgu atmasın
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Onay bekleyen askıda maç bulunamadı, kilit tarihi güncellendi.");
+                return;
+            }
+
+            let matchesText = "";
+            let count = 1;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const p1Name = userMap[data.oyuncu1ID]?.isim || 'Oyuncu 1';
+                const p2Name = userMap[data.oyuncu2ID]?.isim || 'Oyuncu 2';
+                
+                // Tekler mi Çiftler mi kontrol edip takım isimlerini oluştur
+                let team1 = p1Name;
+                if (data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
+                    team1 += ` & ${userMap[data.oyuncu1PartnerID].isim}`;
+                }
+                let team2 = p2Name;
+                if (data.oyuncu2PartnerID && userMap[data.oyuncu2PartnerID]) {
+                    team2 += ` & ${userMap[data.oyuncu2PartnerID].isim}`;
+                }
+
+                // Girilen skor metnini toparla
+                const s = data.skor || {};
+                let scoreStr = `${s.s1_me || 0}-${s.s1_opp || 0}, ${s.s2_me || 0}-${s.s2_opp || 0}`;
+                if (s.s3_me || s.s3_opp) scoreStr += `, ${s.s3_me || 0}-${s.s3_opp || 0}`;
+
+                const reporterName = userMap[data.sonucuGirenID]?.isim || 'Bir Oyuncu';
+                
+                // Onaylaması gereken (yani skoru girmeyen karşı) tarafı tespit et
+                const isTeam1Reporter = (data.sonucuGirenID === data.oyuncu1ID || data.sonucuGirenID === data.oyuncu1PartnerID);
+                const pendingApprovalTeam = isTeam1Reporter ? team2 : team1;
+
+                const typeText = data.macTipi === 'Turnuva' ? '🏆 Turnuva Maçı' : (data.macTipi === 'Meydan Okuma' ? '🎯 Meydan Okuma' : '🤝 Dostluk');
+
+                matchesText += `${count}️⃣ *${team1}* *VS* *${team2}*\n`;
+                matchesText += `   ⚙️ Tür: _${typeText}_ • Format: _${data.macFormati || 'Tekler'}_\n`;
+                matchesText += `   📝 Girilen Skor: *${scoreStr}* (_${reporterName} yazdı_)\n`;
+                matchesText += `   ⏳ Onay Bekleyen Taraf: *${pendingApprovalTeam}* ⚖️\n\n`;
+                count++;
+            });
+
+            const WA_API_URL = "https://7107.api.greenapi.com"; 
+            const WA_INSTANCE_ID = "7107628348";                
+            const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+            const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+            const messageText = 
+                `⚖️ *ASKIDA KALAN MAÇ SONUÇLARI HATIRLATMASI* ⚖️\n\n` +
+                `🎾 Ligimizde skoru girilmiş ancak rakip oyuncu/takım tarafından henüz onaylanmamış karşılaşmalar aşağıdadır:\n\n` +
+                matchesText +
+                `🎯 _Onay bekleyen tarafların acilen uygulamaya girerek "Maç Akışı ➡️ Onay Bekliyor" alanından onay sürecini tamamlaması rica olunur!_ ⚖️\n\n` +
+                `👉 _Uygulamaya Git:_ https://bursatenisligi.github.io/TenisLig/`;
+
+            // WhatsApp grubuna tek parça halinde mesajı gönder
+            const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+            });
+
+            if (response.ok) {
+                // Gönderim başarılıysa döküman kilidini bugünün tarihine kilitle
+                await statusRef.set({ lastSentDate: todayStr });
+                console.log("Günlük onay bekleyen maçlar raporu WhatsApp grubuna başarıyla fırlatıldı! 🚀");
+            }
+        } catch (error) {
+            console.error("💥 Günlük onay bekleyen maçlar özeti gönderilirken hata:", error);
+        }
+    };
+    // --- 15. GÜNDE SADECE 1 KERE ÇALIŞAN LİDERLİK TABLOSU (TEKLER VE ÇİFTLER) ÖZET MOTORU ---
+    window.checkAndSendDailyLeaderboardSummary = async function() {
+        console.log("Günlük sıralama tablosu kontrolü yapılıyor...");
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        const WA_API_URL = "https://7107.api.greenapi.com"; 
+        const WA_INSTANCE_ID = "7107628348";                
+        const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+        const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+        // 📊 1. BÖLÜM: TEKLER LİGİ TOP 10 DUYURUSU
+        try {
+            const statusRefSingles = db.collection('system_status').doc('whatsapp_daily_singles_leaderboard');
+            const statusSnapSingles = await statusRefSingles.get();
+            
+            if (statusSnapSingles.exists && statusSnapSingles.data().lastSentDate === todayStr) {
+                console.log("Bugünün Tekler Sıralama Tablosu zaten WhatsApp grubuna gönderilmiş. ⏩");
+            } else {
+                let usersArray = Object.values(userMap);
+                usersArray.sort((a, b) => (b.toplamPuan || 0) - (a.toplamPuan || 0));
+                let top10Singles = usersArray.slice(0, 10);
+
+                let singlesText = "";
+                top10Singles.forEach((player, idx) => {
+                    const medal = idx === 0 ? "🥇" : (idx === 1 ? "🥈" : (idx === 2 ? "🥉" : "🔹"));
+                    const clubDisplay = player.kulup && player.kulup !== 'Belirtilmemiş' ? ` (_${player.kulup}_)` : '';
+                    singlesText += `${medal} *${idx + 1}. ${player.isim || player.email}* - *${player.toplamPuan || 0} P* ${clubDisplay}\n`;
+                });
+
+                const messageSingles = 
+                    `🏆 *GÜNLÜK TEKLER LİGİ TOP 10 SIRALAMASI* 🏆\n\n` +
+                    `🎾 Bugün ligimizde Tekler kategorisinde günün zirvedeki ilk 10 raketinin güncel puan durumu şu şekildedir:\n\n` +
+                    singlesText + `\n` +
+                    `👉 _Tüm sıralamayı görmek ve rakiplerinize meydan okumak için hemen uygulamaya giriş yapabilirsiniz!_ \n\n` +
+                    `👉 _Uygulamaya Git:_ https://bursatenisligi.github.io/TenisLig/`;
+
+                const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageSingles })
+                });
+
+                if (response.ok) {
+                    await statusRefSingles.set({ lastSentDate: todayStr });
+                    console.log("Günlük Tekler Sıralaması WhatsApp grubuna başarıyla gönderildi! 🚀");
+                }
+            }
+        } catch (error) {
+            console.error("💥 Günlük Tekler sıralaması gönderilirken hata:", error);
+        }
+
+        // 📊 2. BÖLÜM: ÇİFTLER LİGİ TOP 10 DUYURUSU
+        try {
+            const statusRefDoubles = db.collection('system_status').doc('whatsapp_daily_doubles_leaderboard');
+            const statusSnapDoubles = await statusRefDoubles.get();
+            
+            if (statusSnapDoubles.exists && statusSnapDoubles.data().lastSentDate === todayStr) {
+                console.log("Bugünün Çiftler Sıralama Tablosu zaten WhatsApp grubuna gönderilmiş. ⏩");
+            } else {
+                let usersArray = Object.values(userMap);
+                usersArray.sort((a, b) => (b.ciftlerPuani !== undefined ? b.ciftlerPuani : 1000) - (a.ciftlerPuani !== undefined ? a.ciftlerPuani : 1000));
+                let top10Doubles = usersArray.slice(0, 10);
+
+                let doublesText = "";
+                top10Doubles.forEach((player, idx) => {
+                    const medal = idx === 0 ? "👑" : (idx === 1 ? "🥈" : (idx === 2 ? "🥉" : "👥"));
+                    const clubDisplay = player.kulup && player.kulup !== 'Belirtilmemiş' ? ` (_${player.kulup}_)` : '';
+                    const score = player.ciftlerPuani !== undefined ? player.ciftlerPuani : 1000;
+                    doublesText += `${medal} *${idx + 1}. ${player.isim || player.email}* - *${score} P* ${clubDisplay}\n`;
+                });
+
+                const messageDoubles = 
+                    `👥 *GÜNLÜK ÇİFTLER LİGİ TOP 10 SIRALAMASI* 👥\n\n` +
+                    `🎾 Bugün ligimizde Çiftler kategorisinde günün en yüksek puanına sahip ilk 10 oyuncusunun listesi şu şekildedir:\n\n` +
+                    doublesText + `\n` +
+                    `👉 _Çiftler ligi puan durumunu detaylı incelemek ve turnuva takvimini takip etmek için hemen uygulamaya giriş yapabilirsiniz!_ \n\n` +
+                    `👉 _Uygulamaya Git:_ https://bursatenisligi.github.io/TenisLig/`;
+
+                const response = await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageDoubles })
+                });
+
+                if (response.ok) {
+                    await statusRefDoubles.set({ lastSentDate: todayStr });
+                    console.log("Günlük Çiftler Sıralaması WhatsApp grubuna başarıyla gönderildi! 🚀");
+                }
+            }
+        } catch (error) {
+            console.error("💥 Günlük Çiftler sıralaması gönderilirken hata:", error);
+        }
+    };
 };
 }); // DOMContentLoaded SONU
