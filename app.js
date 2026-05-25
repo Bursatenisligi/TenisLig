@@ -5055,6 +5055,7 @@ window.generateAutoTeams = async function(tourId) {
     }).catch(err => {
         showMatchDetail(firestoreMatchId);
     });
+    };
     window.sendWhatsAppOpenAdNotification = async function(adData) {
         const WA_API_URL = "https://7107.api.greenapi.com"; 
         const WA_INSTANCE_ID = "7107628348";                
@@ -5538,5 +5539,5 @@ window.generateAutoTeams = async function(tourId) {
             console.error("💥 Günlük Çiftler sıralaması gönderilirken hata:", error);
         }
     };
-};
+
 }); // DOMContentLoaded SONU
