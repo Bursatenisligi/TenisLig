@@ -1307,6 +1307,12 @@ function showMatchDetail(matchDocId) {
     const currentUserID = auth.currentUser.uid;
 
     db.collection('matches').doc(matchDocId).get().then(async doc => {
+        // GÜVENLİK KONTROLÜ: Döküman veri tabanında mevcut değilse çökmesini engelle
+        if (!doc.exists) {
+            detailMatchInfo.innerHTML = '<p style="color:red;">Maç verisi bulunamadı veya silinmiş.</p>';
+            return;
+        }
+
         const match = doc.data();
         
         // 1. KİMLİK KONTROLLERİ
@@ -1325,16 +1331,18 @@ function showMatchDetail(matchDocId) {
         const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
         const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
         
-        // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA ---
+        // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA (TAM GÜVENLİ VE KORUMALI) ---
         let team1Name = p1Name.split(' ')[0]; 
         if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
-            team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
+            const partner1Name = userMap[match.oyuncu1PartnerID].isim || '???';
+            team1Name += ` & ${partner1Name.split(' ')[0]}`;
         }
         let team2Name = p2Name.split(' ')[0];
         if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
-            team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
+            const partner2Name = userMap[match.oyuncu2PartnerID].isim || '???';
+            team2Name += ` & ${partner2Name.split(' ')[0]}`;
         }
-        // ---------------------------------------------
+        // --------------------------------------------------------------------
         
         winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
         if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
@@ -1481,6 +1489,7 @@ function showMatchDetail(matchDocId) {
             document.getElementById('dynamic-save-score-btn').onclick = () => saveMatchResult(matchDocId);
         }
         else if (match.durum === 'Sonuç_Bekleniyor') {
+            // ... (Mevcut 'Sonuç_Bekleniyor' kodun aynen devam ediyor)
             const s = match.skor || {};
             if (isTourAdmin || match.sonucuGirenID !== currentUserID) {
                 const myS1 = s.s1_opp || 0; const oppS1 = s.s1_me || 0; const myS2 = s.s2_opp || 0; const oppS2 = s.s2_me || 0; const myS3 = s.s3_opp || 0; const oppS3 = s.s3_me || 0;
@@ -1526,42 +1535,33 @@ function showMatchDetail(matchDocId) {
             scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${(match.kayitliKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></p></div>`;
         }
 
+        // Share/Instagram butonu ayarları alt satırda aynen devam ediyor...
         const shareMatchBtn = document.getElementById('btn-share-match-detail');
         if (shareMatchBtn) {
             const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
             newShareBtn.innerHTML = '📸 Instagram\'da Paylaş'; newShareBtn.style.background = 'linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d)';
-            
             newShareBtn.addEventListener('click', async () => {
                 try { await navigator.clipboard.writeText("https://bursatenisligi.github.io/TenisLig/"); } catch(e) {}
                 alert("Sitenin linki panoya (hafızaya) kopyalanıdı! 📋\n\nResim oluştuktan sonra Instagram hikayenize eklerken 'Çıkartmalar' menüsünden 'Bağlantı' aracını seçip kopyalanan linki direkt yapıştırabilirsiniz.");
-
                 let finalMatchData = null; try { if (typeof match !== 'undefined') finalMatchData = match; } catch (e) {}
                 if (!finalMatchData && typeof currentMatchDocId !== 'undefined' && currentMatchDocId) { try { const doc = await db.collection('matches').doc(currentMatchDocId).get(); finalMatchData = doc.data(); } catch (err) { console.error(err); } }
                 if (!finalMatchData) { alert("Veri yüklenemedi, lütfen sayfayı yenileyin."); return; }
-
                 const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQu6E1MzcuNTg2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
-                
                 const getU = (id) => userMap[id] || { isim: 'Bilinmeyen', fotoURL: 'https://via.placeholder.com/150' };
                 const p1 = getU(finalMatchData.oyuncu1ID); const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
                 const p2 = getU(finalMatchData.oyuncu2ID); const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
-                
-                let team1Name = p1.isim; if(p1p) team1Name += ` & ${p1p.isim}`;
-                let team2Name = p2.isim; if(p2p) team2Name += ` & ${p2p.isim}`;
-                
+                let team1NameStr = p1.isim; if(p1p) team1NameStr += ` & ${p1p.isim}`;
+                let team2NameStr = p2.isim; if(p2p) team2NameStr += ` & ${p2p.isim}`;
                 const wid = finalMatchData.kayitliKazananID || finalMatchData.adayKazananID; 
-                let winnerTeam = "?"; 
-                if (wid) { winnerTeam = (wid === finalMatchData.oyuncu1ID) ? team1Name : team2Name; }
-                
+                let winnerTeam = "?"; if (wid) { winnerTeam = (wid === finalMatchData.oyuncu1ID) ? team1NameStr : team2NameStr; }
                 let scoreText = "Skor Yok"; 
                 if (finalMatchData.skor) { 
                     const s = finalMatchData.skor; 
                     let set1 = (parseInt(s.s1_me||0) + parseInt(s.s1_opp||0)) > 0 ? `${s.s1_me}-${s.s1_opp}` : ''; 
                     let set2 = (parseInt(s.s2_me||0) + parseInt(s.s2_opp||0)) > 0 ? `, ${s.s2_me}-${s.s2_opp}` : ''; 
                     let set3 = (parseInt(s.s3_me||0) + parseInt(s.s3_opp||0)) > 0 ? `, ${s.s3_me}-${s.s3_opp}` : ''; 
-                    scoreText = set1 + set2 + set3;
-                    if(scoreText.startsWith(', ')) scoreText = scoreText.substring(2);
+                    scoreText = set1 + set2 + set3; if(scoreText.startsWith(', ')) scoreText = scoreText.substring(2);
                 }
-
                 let matchBadgeHTML = '';
                 if (finalMatchData.macTipi === 'Turnuva' && finalMatchData.tournamentId) {
                     try {
@@ -1569,74 +1569,19 @@ function showMatchDetail(matchDocId) {
                         if(tDoc.exists) { matchBadgeHTML = `<div style="background:rgba(255,255,255,0.25); padding:15px 40px; border-radius:40px; margin-top:20px; font-size:2.2em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3); color:#fff; text-shadow:0 2px 5px rgba(0,0,0,0.5);">🏆 ${tDoc.data().name}</div>`; }
                     } catch(e) {}
                 }
-
                 const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
                 let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
-                
                 const cardStyle = "width: 1080px; height: 1920px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); position: fixed; top: -5000px; left: 0; font-family: 'Poppins', sans-serif; display:flex; flex-direction:column; padding: 100px 80px; box-sizing:border-box; color:white; justify-content:space-between; align-items:center; text-align:center;";
                 const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.6); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.8); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👇 Sıralama ve Detaylar İçin Linke Tıkla 👇</div>`;
-
                 let innerContent = '';
                 if (hasPhoto) {
-                    innerContent = `
-                    <div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;">
-                        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%); z-index:1;"></div>
-                        <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
-                            <div style="display:flex; flex-direction:column; align-items:center;">
-                                <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
-                                <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.8);">MAÇ SONUCU</h1>
-                                ${matchBadgeHTML}
-                            </div>
-                            <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
-                                <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team1Name}</div>
-                                <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.9);">VS</div>
-                                <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team2Name}</div>
-                            </div>
-                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
-                                <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">🏆 KAZANAN</h3>
-                                <div style="font-size:3.8em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.9);">${winnerTeam}</div>
-                                <div style="border-top:3px dashed rgba(255,255,255,0.6); padding-top:40px; width:80%;">
-                                    <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600; text-shadow: 0 3px 8px rgba(0,0,0,0.9);">SKOR</div>
-                                    <div style="font-size:7em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.9);">${scoreText}</div>
-                                </div>
-                            </div>
-                            ${ctaHTML}
-                        </div>
-                    </div>`;
+                    innerContent = `<div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;"><div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%); z-index:1;"></div><div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;"><div style="display:flex; flex-direction:column; align-items:center;"><img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));"><h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.8);">MAÇ SONUCU</h1>${matchBadgeHTML}</div><div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;"><div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team1NameStr}</div><div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.9);">VS</div><div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team2NameStr}</div></div><div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;"><h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">🏆 KAZANAN</h3><div style="font-size:3.8em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.9);">${winnerTeam}</div><div style="border-top:3px dashed rgba(255,255,255,0.6); padding-top:40px; width:80%;"><div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600; text-shadow: 0 3px 8px rgba(0,0,0,0.9);">SKOR</div><div style="font-size:7em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.9);">${scoreText}</div></div></div>${ctaHTML}</div></div>`;
                 } else {
-                    innerContent = `
-                    <div id="capture-story" style="${cardStyle}">
-                        <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
-                            <div style="display:flex; flex-direction:column; align-items:center;">
-                                <img src="${SAFE_LOGO}" style="width:180px; height:180px; margin-bottom:30px;">
-                                <h1 style="margin:0; font-size:5.5em; font-weight:900; letter-spacing:4px; text-shadow: 0 5px 15px rgba(0,0,0,0.4);">MAÇ SONUCU</h1>
-                                ${matchBadgeHTML}
-                            </div>
-                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
-                                <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team1Name}</div>
-                                <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div>
-                                <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2Name}</div>
-                            </div>
-                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
-                                <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
-                                <div style="font-size:4em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.5);">${winnerTeam}</div>
-                                <div style="border-top:3px dashed rgba(255,255,255,0.4); padding-top:40px; width:80%;">
-                                    <div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                    <div style="font-size:7.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.5);">${scoreText}</div>
-                                </div>
-                            </div>
-                            ${ctaHTML}
-                        </div>
-                    </div>`;
+                    innerContent = `<div id="capture-story" style="${cardStyle}"><div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;"><div style="display:flex; flex-direction:column; align-items:center;"><img src="${SAFE_LOGO}" style="width:180px; height:180px; margin-bottom:30px;"><h1 style="margin:0; font-size:5.5em; font-weight:900; letter-spacing:4px; text-shadow: 0 5px 15px rgba(0,0,0,0.4);">MAÇ SONUCU</h1>${matchBadgeHTML}</div><div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;"><div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team1NameStr}</div><div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div><div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2NameStr}</div></div><div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;"><h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">🏆 KAZANAN</h3><div style="font-size:4em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.5);">${winnerTeam}</div><div style="border-top:3px dashed rgba(255,255,255,0.4); padding-top:40px; width:80%;"><div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div><div style="font-size:7.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.5);">${scoreText}</div></div></div>${ctaHTML}</div></div>`;
                 }
                 tempDiv.innerHTML = innerContent; document.body.appendChild(tempDiv);
-
                 await new Promise(r => setTimeout(r, 1000));
-
-                if (typeof shareElementAsImage === 'function') { 
-                    await shareElementAsImage('capture-story', 'mac-sonucu', 'btn-share-match-detail'); 
-                } else { alert("Hata: Görüntü fonksiyonu bulunamadı."); }
-                
+                if (typeof shareElementAsImage === 'function') { await shareElementAsImage('capture-story', 'mac-sonucu', 'btn-share-match-detail'); } else { alert("Hata: Görüntü fonksiyonu bulunamadı."); }
                 setTimeout(() => { if(document.body.contains(tempDiv)) document.body.removeChild(tempDiv); }, 1000);
             });
         }
