@@ -601,60 +601,92 @@ function loadLeaderboard(filterClub = 'all') {
 
 
 
-    function analyzeStats(matches) {
-        let playerStats = {}; let courtStats = {};
-        Object.keys(userMap).forEach(uid => { playerStats[uid] = { id: uid, name: userMap[uid].isim, points: 0, wins: 0, matches: 0, setsPlayed: 0, tieBreakWins: 0, history: [] }; });
+function analyzeStats(matches) {
+    let playerStats = {}; let courtStats = {};
+    Object.keys(userMap).forEach(uid => { playerStats[uid] = { id: uid, name: userMap[uid].isim, points: 0, wins: 0, matches: 0, setsPlayed: 0, tieBreakWins: 0, history: [] }; });
 
-        matches.forEach(m => {
-            if (m.macYeri) courtStats[m.macYeri] = (courtStats[m.macYeri] || 0) + 1;
-            const p1 = m.oyuncu1ID; const p2 = m.oyuncu2ID; const winner = m.kayitliKazananID;
-            let time = m.macZamani ? m.macZamani.seconds : (m.tarih ? m.tarih.seconds : 0);
+    matches.forEach(m => {
+        if (m.macYeri) courtStats[m.macYeri] = (courtStats[m.macYeri] || 0) + 1;
+        
+        const winner = m.kayitliKazananID;
+        let time = m.macZamani ? m.macZamani.seconds : (m.tarih ? m.tarih.seconds : 0);
 
-            [p1, p2].forEach(pid => {
-                if (playerStats[pid]) {
-                    playerStats[pid].matches++;
-                    if (pid === winner) playerStats[pid].wins++;
-                    playerStats[pid].history.push({ time: time, win: (pid === winner) });
-                }
-            });
+        // --- 👥 ÇİFTLER UYUMLU OYUNCU VE TAKIM AYRIŞTIRMA ---
+        const team1 = [m.oyuncu1ID, m.oyuncu1PartnerID].filter(Boolean);
+        const team2 = [m.oyuncu2ID, m.oyuncu2PartnerID].filter(Boolean);
+        const allMatchPlayers = [...team1, ...team2];
 
-            if (m.skor) {
-                const s = m.skor;
-                const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp}];
-                sets.forEach(set => {
-                    const s1 = parseInt(set.p1||0); const s2 = parseInt(set.p2||0);
-                    if (s1 + s2 > 0) {
-                        if (playerStats[m.sonucuGirenID]) playerStats[m.sonucuGirenID].setsPlayed++;
-                        const otherId = (m.sonucuGirenID === p1) ? p2 : p1;
-                        if (playerStats[otherId]) playerStats[otherId].setsPlayed++;
-                        if ((s1 === 7 && s2 === 6) || (s1 === 6 && s2 === 7)) {
-                            const tbWinner = (s1 === 7) ? m.sonucuGirenID : otherId;
-                            if(playerStats[tbWinner]) playerStats[tbWinner].tieBreakWins++;
+        const isTeam1Winner = (winner === m.oyuncu1ID);
+        const isTeam2Winner = (winner === m.oyuncu2ID);
+
+        allMatchPlayers.forEach(pid => {
+            if (playerStats[pid]) {
+                playerStats[pid].matches++;
+                
+                // Oyuncunun takımı maçı kazandı mı?
+                let isPlayerWinner = false;
+                if (team1.includes(pid) && isTeam1Winner) isPlayerWinner = true;
+                if (team2.includes(pid) && isTeam2Winner) isPlayerWinner = true;
+
+                if (isPlayerWinner) playerStats[pid].wins++;
+                playerStats[pid].history.push({ time: time, win: isPlayerWinner });
+            }
+        });
+
+        if (m.skor) {
+            const s = m.skor;
+            const sets = [{p1: s.s1_me, p2: s.s1_opp}, {p1: s.s2_me, p2: s.s2_opp}, {p1: s.s3_me, p2: s.s3_opp}];
+            sets.forEach(set => {
+                const s1 = parseInt(set.p1||0); const s2 = parseInt(set.p2||0);
+                if (s1 + s2 > 0) {
+                    // Maçtaki 4 oyuncu da bu seti oynamış kabul edilir
+                    allMatchPlayers.forEach(pid => {
+                        if (playerStats[pid]) playerStats[pid].setsPlayed++;
+                    });
+
+                    // Tie-Break kontrolü (7-6 veya 6-7)
+                    if ((s1 === 7 && s2 === 6) || (s1 === 6 && s2 === 7)) {
+                        let team1WonSetTB = false;
+                        if (m.macTipi === 'Turnuva') {
+                            // Turnuva maçlarında skor kutuları sabittir (p1=Takım1, p2=Takım2)
+                            team1WonSetTB = (s1 === 7);
+                        } else {
+                            // Normal lobi meydan okumalarında skor girene göre ayna mantığı
+                            const reporterIsTeam1 = team1.includes(m.sonucuGirenID);
+                            if (s1 === 7) team1WonSetTB = reporterIsTeam1;
+                            else team1WonSetTB = !reporterIsTeam1;
+                        }
+
+                        // Tie-break'i kazanan takımdaki tüm oyunculara +1 TB zaferi ekle
+                        const tbWinningTeam = team1WonSetTB ? team1 : team2;
+                        tbWinningTeam.forEach(pid => {
+                            if (playerStats[pid]) playerStats[pid].tieBreakWins++;
+                            });
                         }
                     }
                 });
             }
         });
 
-        let maxWins = { val: 0, p: null }; let maxMatches = { val: 0, p: null }; let maxSets = { val: 0, p: null }; let maxTB = { val: 0, p: null }; let maxStreak = { val: 0, p: null }; let maxPointsTotal = { val: -99999, p: null };
-        Object.values(userMap).forEach(u => { if(u.toplamPuan > maxPointsTotal.val) maxPointsTotal = { val: u.toplamPuan, p: u.isim }; });
-        Object.values(playerStats).forEach(p => {
-            if (p.wins > maxWins.val) maxWins = { val: p.wins, p: p.name };
-            if (p.matches > maxMatches.val) maxMatches = { val: p.matches, p: p.name };
-            if (p.setsPlayed > maxSets.val) maxSets = { val: p.setsPlayed, p: p.name };
-            if (p.tieBreakWins > maxTB.val) maxTB = { val: p.tieBreakWins, p: p.name };
-            if (p.history.length > 0) {
-                p.history.sort((a, b) => a.time - b.time);
-                let currentStreak = 0; let bestStreak = 0;
-                p.history.forEach(h => { if (h.win) { currentStreak++; if (currentStreak > bestStreak) bestStreak = currentStreak; } else { currentStreak = 0; } });
-                if (bestStreak > maxStreak.val) maxStreak = { val: bestStreak, p: p.name };
-            }
-        });
+    let maxWins = { val: 0, p: null }; let maxMatches = { val: 0, p: null }; let maxSets = { val: 0, p: null }; let maxTB = { val: 0, p: null }; let maxStreak = { val: 0, p: null }; let maxPointsTotal = { val: -99999, p: null };
+    Object.values(userMap).forEach(u => { if(u.toplamPuan > maxPointsTotal.val) maxPointsTotal = { val: u.toplamPuan, p: u.isim }; });
+    Object.values(playerStats).forEach(p => {
+        if (p.wins > maxWins.val) maxWins = { val: p.wins, p: p.name };
+        if (p.matches > maxMatches.val) maxMatches = { val: p.matches, p: p.name };
+        if (p.setsPlayed > maxSets.val) maxSets = { val: p.setsPlayed, p: p.name };
+        if (p.tieBreakWins > maxTB.val) maxTB = { val: p.tieBreakWins, p: p.name };
+        if (p.history.length > 0) {
+            p.history.sort((a, b) => a.time - b.time);
+            let currentStreak = 0; let bestStreak = 0;
+            p.history.forEach(h => { if (h.win) { currentStreak++; if (currentStreak > bestStreak) bestStreak = currentStreak; } else { currentStreak = 0; } });
+            if (bestStreak > maxStreak.val) maxStreak = { val: bestStreak, p: p.name };
+        }
+    });
 
-        let bestCourt = { val: 0, name: '-' };
-        Object.keys(courtStats).forEach(c => { if(courtStats[c] > bestCourt.val) bestCourt = { val: courtStats[c], name: c }; });
-        return { maxPointsTotal, maxWins, maxMatches, maxStreak, maxTB, maxSets, bestCourt };
-    }
+    let bestCourt = { val: 0, name: '-' };
+    Object.keys(courtStats).forEach(c => { if(courtStats[c] > bestCourt.val) bestCourt = { val: courtStats[c], name: c }; });
+    return { maxPointsTotal, maxWins, maxMatches, maxStreak, maxTB, maxSets, bestCourt };
+}
 
     async function loadTheBests(filterType = 'all') {
         if (!bestsContainer) return;
@@ -2396,22 +2428,53 @@ submitChallengeBtn.addEventListener('click', async () => {
         finishBtn.onclick = closeOnboarding; closeBtn.onclick = closeOnboarding;
     }
 
-    async function getPeriodStats(userId, startDate, endDate) {
-        const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get(); const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
-        const [s1, s2] = await Promise.all([q1, q2]); let matches = [];
-        const process = (doc) => { const m = doc.data(); const d = m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : null); if (d && d >= startDate && d <= endDate) { matches.push({ ...m, id: doc.id }); } };
-        s1.forEach(process); s2.forEach(process);
-        matches = matches.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i);
-        if (matches.length === 0) return null;
-        let stats = { totalMatches: matches.length, wins: 0, pointsEarned: 0, photos: [] };
-        matches.forEach(m => {
-            const isWinner = m.kayitliKazananID === userId; if (isWinner) stats.wins++;
-            let pts = 50; if (m.macTipi === 'Meydan Okuma') pts = m.bahisPuani || 50;
-            if (isWinner) stats.pointsEarned += pts; else stats.pointsEarned += 10; 
-            if (m.macFotoURL) stats.photos.push(m.macFotoURL);
-        });
-        return stats;
-    }
+async function getPeriodStats(userId, startDate, endDate) {
+    // 💡 ÇİFTLER UYUMLULUĞU: Partner olarak oynanan maçları da yakalamak için 4 sorguyu birleştiriyoruz
+    const q1 = db.collection('matches').where('oyuncu1ID', '==', userId).where('durum', '==', 'Tamamlandı').get(); 
+    const q2 = db.collection('matches').where('oyuncu2ID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+    const q3 = db.collection('matches').where('oyuncu1PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+    const q4 = db.collection('matches').where('oyuncu2PartnerID', '==', userId).where('durum', '==', 'Tamamlandı').get();
+    
+    const [s1, s2, s3, s4] = await Promise.all([q1, q2, q3, q4]); 
+    let matches = [];
+    
+    const process = (doc) => { 
+        const m = doc.data(); 
+        const d = m.macZamani ? m.macZamani.toDate() : (m.tarih ? m.tarih.toDate() : null); 
+        if (d && d >= startDate && d <= endDate) { matches.push({ ...m, id: doc.id }); } 
+    };
+    
+    s1.forEach(process); s2.forEach(process); s3.forEach(process); s4.forEach(process);
+    
+    // Mükerrer (çift) kayıtları temizle
+    matches = matches.filter((v,i,a)=>a.findIndex(t=>(t.id === v.id))===i);
+    if (matches.length === 0) return null;
+    
+    let stats = { totalMatches: matches.length, wins: 0, pointsEarned: 0, photos: [] };
+    
+    matches.forEach(m => {
+        // --- 👥 ÇİFTLER UYUMLU KAZANAN KONTROLÜ ---
+        const team1 = [m.oyuncu1ID, m.oyuncu1PartnerID].filter(Boolean);
+        const team2 = [m.oyuncu2ID, m.oyuncu2PartnerID].filter(Boolean);
+        
+        const isTeam1Winner = (m.kayitliKazananID === m.oyuncu1ID);
+        const isTeam2Winner = (m.kayitliKazananID === m.oyuncu2ID);
+
+        let isWinner = false;
+        if (team1.includes(userId) && isTeam1Winner) isWinner = true;
+        if (team2.includes(userId) && isTeam2Winner) isWinner = true;
+
+        if (isWinner) stats.wins++;
+        
+        // Puan hesaplama (Kazanana maç puanı, kaybedene 10 katılım puanı)
+        let pts = 50; 
+        if (m.macTipi === 'Meydan Okuma') pts = m.bahisPuani || 50;
+        
+        if (isWinner) stats.pointsEarned += pts; else stats.pointsEarned += 10;
+        if (m.macFotoURL) stats.photos.push(m.macFotoURL);
+    });
+    return stats;
+}
 
     async function checkAndShowRecaps() {
         const userId = auth.currentUser.uid; const now = new Date();
