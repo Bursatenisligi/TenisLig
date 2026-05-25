@@ -1298,342 +1298,353 @@ function createModernMatchHTML(match, currentUserID, isFixture = false) {
     }
 
 function showMatchDetail(matchDocId) {
-        tabSections.forEach(s => s.style.display = 'none'); matchDetailView.style.display = 'block'; currentMatchDocId = matchDocId;
-        if(matchUploadPreview) { matchUploadPreview.style.display='none'; matchUploadPreview.src=''; }
-        if(matchResultPhotoInput) { matchResultPhotoInput.value = ''; }
-        if(detailMatchPhoto) { detailMatchPhoto.style.display='none'; detailMatchPhoto.src=''; }
-        actionButtonsContainer.innerHTML = ''; document.getElementById('result-message').textContent = '';
+    tabSections.forEach(s => s.style.display = 'none'); matchDetailView.style.display = 'block'; currentMatchDocId = matchDocId;
+    if(matchUploadPreview) { matchUploadPreview.style.display='none'; matchUploadPreview.src=''; }
+    if(matchResultPhotoInput) { matchResultPhotoInput.value = ''; }
+    if(detailMatchPhoto) { detailMatchPhoto.style.display='none'; detailMatchPhoto.src=''; }
+    actionButtonsContainer.innerHTML = ''; document.getElementById('result-message').textContent = '';
 
-        const currentUserID = auth.currentUser.uid;
+    const currentUserID = auth.currentUser.uid;
 
-        // EKSİK OLAN KISIM BURASIYDI: "async" ekledik ve değişkenleri tanımladık
-        db.collection('matches').doc(matchDocId).get().then(async doc => {
-            const match = doc.data();
-            
-            // 1. KİMLİK KONTROLLERİ (Hatanın Çözüldüğü Yer)
-            const isParticipant = (currentUserID === match.oyuncu1ID || currentUserID === match.oyuncu2ID || currentUserID === match.oyuncu1PartnerID || currentUserID === match.oyuncu2PartnerID);
-            
-            let isTourAdmin = false;
-            if (match.tournamentId) {
-                try {
-                    const tourSnap = await db.collection('tournaments').doc(match.tournamentId).get();
-                    if (tourSnap.exists && tourSnap.data().creatorId === currentUserID) {
-                        isTourAdmin = true;
-                    }
-                } catch(e) { console.error("Turnuva admini kontrol edilirken hata:", e); }
-            }
-
-            const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
-            const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
-            
-            // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA ---
-            let team1Name = p1Name.split(' ')[0]; 
-            if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
-                team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
-            }
-            let team2Name = p2Name.split(' ')[0];
-            if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
-                team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
-            }
-            // ---------------------------------------------
-            
-            winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
-            if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
-            
-            let infoHTML = `<h3>${match.macTipi} ${!(match.macFormati || '').includes('Tekler') ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
-            if(match.durum === 'Acik_Ilan') infoHTML += `<p style="color:orange; font-weight:bold;">Bu bir açık ilandır.</p>`;
-            
-            const courtType = match.kortTipi ? ` (${match.kortTipi})` : '';
-            if(match.macYeri && match.macZamani) { const d = match.macZamani.toDate().toLocaleString('tr-TR'); infoHTML += `<div style="background-color:#e2e6ea; padding:8px; border-radius:5px; margin-top:5px;">📍 <strong>${match.macYeri}${courtType}</strong><br>⏰ <strong>${d}</strong></div>`; } 
-            else if (match.kortTipi) { infoHTML += `<div style="background-color:#e2e6ea; padding:8px; border-radius:5px; margin-top:5px;">Kort Tipi: <strong>${match.kortTipi}</strong></div>`; }
-            
-            if(match.macFotoURL && detailMatchPhoto) { detailMatchPhoto.src = match.macFotoURL; detailMatchPhoto.style.display = 'block'; }
-            detailMatchInfo.innerHTML = infoHTML;
-
-            const photoArea = document.getElementById('photo-upload-area'); const currentPhotoDisplay = document.getElementById('current-match-photo-display'); const previewImg = document.getElementById('standalone-photo-preview'); const photoInput = document.getElementById('standalone-photo-input');
-            if(previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }
-            if(photoInput) photoInput.value = '';
-
-            const isEligibleStatus = ['Hazır', 'Sonuç_Bekleniyor', 'Tamamlandı'].includes(match.durum);
-
-// [GÜNCELLENEN SATIR]: Yetki alanına turnuva adminini de (isTourAdmin) dahil ettik
-if ((isParticipant || isTourAdmin) && isEligibleStatus && photoArea) {
-    photoArea.style.display = 'block';
-    if (match.macFotoURL && currentPhotoDisplay) { currentPhotoDisplay.src = match.macFotoURL; currentPhotoDisplay.style.display = 'block'; } else if(currentPhotoDisplay) { currentPhotoDisplay.style.display = 'none'; }
-    const saveBtn = document.getElementById('btn-save-photo-only'); if(saveBtn) saveBtn.onclick = () => saveOnlyPhoto(matchDocId);
-} else if (photoArea) { photoArea.style.display = 'none'; }
-
-            loadMatchInteractions(matchDocId, match);
-
-            scoreInputSection.style.display = 'none'; scoreDisplaySection.style.display = 'none'; winnerSelect.style.display = 'none'; scheduleInputSection.style.display = 'none'; 
-            
-            if (chatFromMatchBtn) {
-                if (match.oyuncu2ID && isParticipant) {
-                    const opponentId = currentUserID === match.oyuncu1ID ? match.oyuncu2ID : match.oyuncu1ID;
-                    const opponentName = userMap[opponentId]?.isim || 'Rakip';
-                    chatFromMatchBtn.style.display = 'block'; chatFromMatchBtn.onclick = () => openChat(opponentId, opponentName);
-                } else { chatFromMatchBtn.style.display = 'none'; }
-            }
-            
-            // 2. YETKİ KONTROLÜ İLE BUTONLARI GÖSTER (Oyuncu veya Admin)
-            if (!isParticipant && !isTourAdmin) {
-                if (match.durum === 'Sonuç_Bekleniyor' || match.durum === 'Tamamlandı') {
-                    const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
-                    let resText = match.durum === 'Tamamlandı' ? `<p style="color:green;">Kazanan: ${userMap[match.kayitliKazananID]?.isim}</p>` : `<p style="color:orange;">Sonuç Onayı Bekleniyor</p>`;
-                    scoreDisplaySection.innerHTML = `<div style="background:#f1f1f1; padding:10px; border-radius:5px;"><p><strong>Skor:</strong> ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}, ${s.s3_me}-${s.s3_opp}</p>${resText}</div>`;
-                } else { document.getElementById('result-message').textContent = "Bu maç henüz oynanmadı veya sonuç girilmedi."; }
-                return;
-            }
-            
-            if (match.durum === 'Acik_Ilan' && currentUserID === match.oyuncu1ID) {
-                const dbn = document.createElement('button'); dbn.textContent = 'İlanı Kaldır 🗑️'; dbn.className = 'btn-reject'; dbn.onclick = () => deleteMatch(matchDocId, "İlan kaldırıldı."); actionButtonsContainer.appendChild(dbn); 
-                return;
-            }
-
-            if (match.durum === 'Bekliyor') {
-                if (currentUserID === match.oyuncu2ID) {
-                    if (!(match.macFormati || '').includes('Tekler')) {
-                        const label = document.createElement('label'); label.textContent = "Takım Arkadaşın (Partnerin):"; label.className = "input-label"; label.style.marginTop = "0";
-                        const s = document.createElement('select'); s.id = 'accept-challenge-partner'; s.style.marginBottom = '15px'; s.innerHTML = '<option value="">Partnerini Seç</option>';
-                        Object.values(userMap).forEach(p => { if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) { s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; } });
-                        actionButtonsContainer.appendChild(label); actionButtonsContainer.appendChild(s);
-                    }
-                    const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
-                    ab.onclick = async () => {
-                        let partnerID = null;
-                        if (!(match.macFormati || '').includes('Tekler')) {
-                            const pSelect = document.getElementById('accept-challenge-partner');
-                            if (!pSelect.value) return alert("Lütfen partnerini seç!"); partnerID = pSelect.value;
-                        }
-                        try {
-                            await db.collection('matches').doc(matchDocId).update({ durum: 'Hazır', oyuncu2PartnerID: partnerID });
-                            const myName = userMap[currentUserID]?.isim || 'Rakibin'; const subject = "✅ Maç Teklifin Kabul Edildi!";
-                            const body = `<p><strong>${myName}</strong> maç teklifini kabul etti!</p><p>Hemen uygulamaya girip maç tarihini ve kortu belirleyebilirsiniz.</p><p><a href="https://bursatenisligi.github.io/TenisLig/">Uygulamaya Git</a></p>`;
-                            sendNotificationEmail(match.oyuncu1ID, subject, body);
-                            alert("Kabul edildi! Rakibine mail bildirimi gönderildi. 📨"); goBackToList();
-                        } catch (err) { console.error(err); alert("Kabul edilirken hata oluştu: " + err.message); }
-                    };
-                    const rb = document.createElement('button'); rb.textContent = 'Reddet ❌'; rb.className = 'btn-reject'; rb.onclick = () => deleteMatch(matchDocId, "Reddedildi."); 
-                    actionButtonsContainer.append(ab, rb);
-                } else if (currentUserID === match.oyuncu1ID) {
-                    const wb = document.createElement('button'); wb.textContent = 'Geri Çek ↩️'; wb.className = 'btn-withdraw'; wb.onclick = () => deleteMatch(matchDocId, "Geri çekildi."); actionButtonsContainer.appendChild(wb);
+    db.collection('matches').doc(matchDocId).get().then(async doc => {
+        const match = doc.data();
+        
+        // 1. KİMLİK KONTROLLERİ
+        const isParticipant = (currentUserID === match.oyuncu1ID || currentUserID === match.oyuncu2ID || currentUserID === match.oyuncu1PartnerID || currentUserID === match.oyuncu2PartnerID);
+        
+        let isTourAdmin = false;
+        if (match.tournamentId) {
+            try {
+                const tourSnap = await db.collection('tournaments').doc(match.tournamentId).get();
+                if (tourSnap.exists && tourSnap.data().creatorId === currentUserID) {
+                    isTourAdmin = true;
                 }
-            } 
-            else if (match.durum === 'Hazır') {
-                scheduleInputSection.style.display = 'block'; 
-                scheduleInputSection.innerHTML = `
-                    <button id="btn-toggle-schedule" class="btn-purple" style="width:100%; margin-bottom:10px; display:flex; justify-content:center; align-items:center; gap:10px;"><span>📅</span> Maç Planla / Güncelle</button>
-                    <div id="schedule-form-container" style="display:none; background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
-                        <h4 style="margin-top:0; margin-bottom:10px; color:#6f42c1; font-size:0.9em; border-bottom:1px solid #ddd; padding-bottom:5px;">Plan Detayları</h4>
-                        <label class="input-label">Kort Tipi:</label>
-                        <select id="dynamic-court-type"><option value="Toprak">Toprak 🧱</option><option value="Sert">Sert 🟦</option></select>
-                        <label class="input-label">Kort Seçimi:</label>
-                        <select id="dynamic-venue-select"><option value="">Kort Seç</option></select>
-                        <label class="input-label">Tarih ve Saat:</label>
-                        <input type="datetime-local" id="dynamic-time-input">
-                        <button id="dynamic-save-schedule-btn" class="btn-save-schedule" style="margin-top:10px;">Planı Kaydet ✅</button>
-                    </div>`;
+            } catch(e) { console.error("Turnuva admini kontrol edilirken hata:", e); }
+        }
 
-                const toggleSchedBtn = document.getElementById('btn-toggle-schedule'); const schedContainer = document.getElementById('schedule-form-container');
-                toggleSchedBtn.onclick = () => { const isHidden = schedContainer.style.display === 'none'; schedContainer.style.display = isHidden ? 'block' : 'none'; toggleSchedBtn.style.opacity = isHidden ? '0.9' : '1'; };
+        const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
+        const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
+        
+        // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA ---
+        let team1Name = p1Name.split(' ')[0]; 
+        if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
+            team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
+        }
+        let team2Name = p2Name.split(' ')[0];
+        if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
+            team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
+        }
+        // ---------------------------------------------
+        
+        winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
+        if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
+        
+        let infoHTML = `<h3>${match.macTipi} ${!(match.macFormati || '').includes('Tekler') ? '<span style="color:#28a745; font-size:0.8em;">(Çiftler 👥)</span>' : ''}</h3><p><strong>${team1Name}</strong> <br><span style="color:#999; font-size:0.8em;">vs</span><br> <strong>${team2Name}</strong></p><p>Bahis: ${match.bahisPuani} Puan</p>`;
+        if(match.durum === 'Acik_Ilan') infoHTML += `<p style="color:orange; font-weight:bold;">Bu bir açık ilandır.</p>`;
+        
+        const courtType = match.kortTipi ? ` (${match.kortTipi})` : '';
+        
+        // --- GÜVENLİ ZAMAN AYRIŞTIRICI ---
+        if(match.macYeri && match.macZamani) { 
+            let jsDate = typeof match.macZamani.toDate === 'function' ? match.macZamani.toDate() : (match.macZamani.seconds !== undefined ? new Date(match.macZamani.seconds * 1000) : null);
+            const d = jsDate ? jsDate.toLocaleString('tr-TR') : 'Tarih Belirsiz';
+            infoHTML += `<div style="background-color:#e2e6ea; padding:8px; border-radius:5px; margin-top:5px;">📍 <strong>${match.macYeri}${courtType}</strong><br>⏰ <strong>${d}</strong></div>`; 
+        } 
+        else if (match.kortTipi) { 
+            infoHTML += `<div style="background-color:#e2e6ea; padding:8px; border-radius:5px; margin-top:5px;">Kort Tipi: <strong>${match.kortTipi}</strong></div>`; 
+        }
+        
+        if(match.macFotoURL && detailMatchPhoto) { detailMatchPhoto.src = match.macFotoURL; detailMatchPhoto.style.display = 'block'; }
+        detailMatchInfo.innerHTML = infoHTML;
 
-                const dVenueSelect = document.getElementById('dynamic-venue-select');
-                COURT_LIST.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if(match.macYeri === c) o.selected = true; dVenueSelect.appendChild(o); });
-                if(match.kortTipi) document.getElementById('dynamic-court-type').value = match.kortTipi;
-                if(match.macZamani) { const dateVal = new Date(match.macZamani.toDate().getTime() - (match.macZamani.toDate().getTimezoneOffset() * 60000)).toISOString().slice(0,16); document.getElementById('dynamic-time-input').value = dateVal; }
-                document.getElementById('dynamic-save-schedule-btn').onclick = () => saveMatchSchedule(matchDocId);
+        const photoArea = document.getElementById('photo-upload-area'); const currentPhotoDisplay = document.getElementById('current-match-photo-display'); const previewImg = document.getElementById('standalone-photo-preview'); const photoInput = document.getElementById('standalone-photo-input');
+        if(previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }
+        if(photoInput) photoInput.value = '';
 
-                scoreInputSection.style.display = 'block'; 
-                scoreInputSection.innerHTML = `
-                    <button id="btn-toggle-score" class="btn-main" style="width:100%; margin-bottom:10px; display:flex; justify-content:center; align-items:center; gap:10px; background: linear-gradient(to right, #ffc107, #ff9800); color:#333;"><span>📝</span> Maç Sonucu Gir</button>
-                    <div id="score-form-container" style="display:none; background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #ffeeba;">
-                         <h4 style="margin-top:0; margin-bottom:10px; color:#856404; font-size:0.9em; border-bottom:1px solid #e6dbb9; padding-bottom:5px;">Maç Detayları</h4>
-                         <div style="margin-bottom:15px;">
-                            <label class="input-label" style="color:#856404;">Hangi zeminde oynadınız?</label>
-                            <select id="score-court-type" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e6dbb9;"><option value="Toprak" ${match.kortTipi === 'Toprak' ? 'selected' : ''}>Toprak 🧱</option><option value="Sert" ${match.kortTipi === 'Sert' ? 'selected' : ''}>Sert 🟦</option></select>
-                         </div>
-                         <div class="score-row"><span>1. Set</span><input type="number" id="s1-me" class="score-box" placeholder="P1" value="${match.skor?.s1_me || ''}"><input type="number" id="s1-opp" class="score-box" placeholder="P2" value="${match.skor?.s1_opp || ''}"></div>
-                        <div class="score-row"><span>2. Set</span><input type="number" id="s2-me" class="score-box" placeholder="P1" value="${match.skor?.s2_me || ''}"><input type="number" id="s2-opp" class="score-box" placeholder="P2" value="${match.skor?.s2_opp || ''}"></div>
-                        <div class="score-row"><span>3. Set (Opsiyonel)</span><input type="number" id="s3-me" class="score-box" placeholder="P1" value="${match.skor?.s3_me || ''}"><input type="number" id="s3-opp" class="score-box" placeholder="P2" value="${match.skor?.s3_opp || ''}"></div>
-                        <div id="winner-select-container" style="margin-top: 15px; margin-bottom: 10px;"><label style="font-size:0.85em; color:#856404; font-weight:bold; margin-bottom:5px; display:block;">Kazanan Kim?</label></div>
-                        <button id="dynamic-save-score-btn" class="btn-save" style="margin-top:5px; background-color:#28a745;">Sonucu Kaydet ve Gönder 🚀</button>
-                    </div>`;
+        const isEligibleStatus = ['Hazır', 'Sonuç_Bekleniyor', 'Tamamlandı'].includes(match.durum);
 
-                const scoreContainer = document.getElementById('score-form-container'); const winnerContainer = document.getElementById('winner-select-container');
-                winnerSelect.style.display = 'block'; winnerSelect.style.marginBottom = '0'; winnerContainer.appendChild(winnerSelect);
+        if ((isParticipant || isTourAdmin) && isEligibleStatus && photoArea) {
+            photoArea.style.display = 'block';
+            if (match.macFotoURL && currentPhotoDisplay) { currentPhotoDisplay.src = match.macFotoURL; currentPhotoDisplay.style.display = 'block'; } else if(currentPhotoDisplay) { currentPhotoDisplay.style.display = 'none'; }
+            const saveBtn = document.getElementById('btn-save-photo-only'); if(saveBtn) saveBtn.onclick = () => saveOnlyPhoto(matchDocId);
+        } else if (photoArea) { photoArea.style.display = 'none'; }
 
-                const toggleScoreBtn = document.getElementById('btn-toggle-score');
-                toggleScoreBtn.onclick = () => { const isHidden = scoreContainer.style.display === 'none'; scoreContainer.style.display = isHidden ? 'block' : 'none'; };
-                document.getElementById('dynamic-save-score-btn').onclick = () => saveMatchResult(matchDocId);
-            }
-            else if (match.durum === 'Sonuç_Bekleniyor') {
-                const s = match.skor || {};
-                // Admin VEYA skoru giren kişi değilse onay ekranını görsün
-                if (isTourAdmin || match.sonucuGirenID !== currentUserID) {
-                    const myS1 = s.s1_opp || 0; const oppS1 = s.s1_me || 0; const myS2 = s.s2_opp || 0; const oppS2 = s.s2_me || 0; const myS3 = s.s3_opp || 0; const oppS3 = s.s3_me || 0;
-                    const p1Val = match.oyuncu1ID; const p2Val = match.oyuncu2ID;
+        loadMatchInteractions(matchDocId, match);
 
-                    scoreDisplaySection.style.display = 'block';
-                    scoreDisplaySection.innerHTML = `
-                        <div style="background:#e3f2fd; padding:15px; border-radius:10px; border:1px solid #bbdefb; text-align:center;">
-                            <h4 style="margin-top:0; color:#0d47a1;">📬 Skor Onayı Bekleniyor</h4>
-                            <div style="font-size:1.2em; font-weight:bold; margin-bottom:10px;">${oppS1}-${myS1}, ${oppS2}-${myS2} ${s.s3_me || s.s3_opp ? `, ${oppS3}-${myS3}` : ''}</div>
-                            <div style="font-size:0.9em; color:#555; margin-bottom:15px;">Kazanan Adayı: <strong>${(match.adayKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></div>
-                            <button id="btn-toggle-approve" class="btn-main" style="background-color:#007bff; width:100%;">⚖️ Skoru İncele / Onayla / Değiştir</button>
-                            <div id="approve-action-area" style="display:none; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd;">
-                                <p style="color:#28a745; font-weight:bold; margin-bottom:5px;">✅ Her şey doğru mu?</p>
-                                <button id="btn-quick-approve" class="btn-approve" style="margin-bottom:20px;">Evet, Skoru Onayla</button>
-                                <hr style="border-top:1px dashed #ccc; margin-bottom:15px;">
-                                <p style="color:#ffc107; font-weight:bold; margin-bottom:10px;">✏️ Yanlışlık mı var? Düzenle ve Gönder:</p>
-                                <label class="input-label">Kazanan Kim?</label>
-                                <select id="change-winner-select"><option value="${p1Val}" ${match.adayKazananID === p1Val ? 'selected' : ''}>${userMap[p1Val]?.isim}</option><option value="${p2Val}" ${match.adayKazananID === p2Val ? 'selected' : ''}>${userMap[p2Val]?.isim}</option></select>
-                                <div class="score-row"><span>1. Set</span><input type="number" id="c-s1-me" class="score-box" value="${myS1}"> <input type="number" id="c-s1-opp" class="score-box" value="${oppS1}"> </div>
-                                <div class="score-row"><span>2. Set</span><input type="number" id="c-s2-me" class="score-box" value="${myS2}"> <input type="number" id="c-s2-opp" class="score-box" value="${oppS2}"> </div>
-                                <div class="score-row"><span>3. Set</span><input type="number" id="c-s3-me" class="score-box" value="${myS3}"> <input type="number" id="c-s3-opp" class="score-box" value="${oppS3}"> </div>
-                                <button id="btn-submit-change" class="btn-save" style="background-color:#ff9800; margin-top:10px;">Değişikliği Gönder 🔄</button>
-                            </div>
-                        </div>`;
-
-                    const tglBtn = document.getElementById('btn-toggle-approve'); const actionArea = document.getElementById('approve-action-area');
-                    tglBtn.onclick = () => { const isHidden = actionArea.style.display === 'none'; actionArea.style.display = isHidden ? 'block' : 'none'; };
-                    document.getElementById('btn-quick-approve').onclick = () => finalizeMatch(matchDocId, match);
-                    document.getElementById('btn-submit-change').onclick = () => updateAndResubmitScore(matchDocId);
-                } else {
-                    scoreDisplaySection.style.display = 'block';
-                    scoreDisplaySection.innerHTML = `
-                        <div style="background:#fff3cd; padding:15px; border-radius:10px; border:1px solid #ffeeba; text-align:center;">
-                            <h4 style="margin:0; color:#856404;">⏳ Onay Bekleniyor</h4>
-                            <p style="margin:5px 0; font-size:0.9em;">Rakibin veya Turnuva Yönetiminin sonucu onaylaması bekleniyor.</p>
-                            <div style="font-weight:bold; margin-top:10px;">Girilen Skor: ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}</div>
-                        </div>`;
-                }
-            }
-            else if (match.durum === 'Tamamlandı') {
+        scoreInputSection.style.display = 'none'; scoreDisplaySection.style.display = 'none'; winnerSelect.style.display = 'none'; scheduleInputSection.style.display = 'none'; 
+        
+        if (chatFromMatchBtn) {
+            if (match.oyuncu2ID && isParticipant) {
+                const opponentId = currentUserID === match.oyuncu1ID ? match.oyuncu2ID : match.oyuncu1ID;
+                const opponentName = userMap[opponentId]?.isim || 'Rakip';
+                chatFromMatchBtn.style.display = 'block'; chatFromMatchBtn.onclick = () => openChat(opponentId, opponentName);
+            } else { chatFromMatchBtn.style.display = 'none'; }
+        }
+        
+        // 2. YETKİ KONTROLÜ İLE BUTONLARI GÖSTER
+        if (!isParticipant && !isTourAdmin) {
+            if (match.durum === 'Sonuç_Bekleniyor' || match.durum === 'Tamamlandı') {
                 const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
-                scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${(match.kayitliKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></p></div>`;
-            }
+                let resText = match.durum === 'Tamamlandı' ? `<p style="color:green;">Kazanan: ${userMap[match.kayitliKazananID]?.isim}</p>` : `<p style="color:orange;">Sonuç Onayı Bekleniyor</p>`;
+                scoreDisplaySection.innerHTML = `<div style="background:#f1f1f1; padding:10px; border-radius:5px;"><p><strong>Skor:</strong> ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}, ${s.s3_me}-${s.s3_opp}</p>${resText}</div>`;
+            } else { document.getElementById('result-message').textContent = "Bu maç henüz oynanmadı veya sonuç girilmedi."; }
+            return;
+        }
+        
+        if (match.durum === 'Acik_Ilan' && currentUserID === match.oyuncu1ID) {
+            const dbn = document.createElement('button'); dbn.textContent = 'İlanı Kaldır 🗑️'; dbn.className = 'btn-reject'; dbn.onclick = () => deleteMatch(matchDocId, "İlan kaldırıldı."); actionButtonsContainer.appendChild(dbn); 
+            return;
+        }
 
-const shareMatchBtn = document.getElementById('btn-share-match-detail');
-            if (shareMatchBtn) {
-                const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
-                newShareBtn.innerHTML = '📸 Instagram\'da Paylaş'; newShareBtn.style.background = 'linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d)';
+        if (match.durum === 'Bekliyor') {
+            if (currentUserID === match.oyuncu2ID) {
+                if (!(match.macFormati || '').includes('Tekler')) {
+                    const label = document.createElement('label'); label.textContent = "Takım Arkadaşın (Partnerin):"; label.className = "input-label"; label.style.marginTop = "0";
+                    const s = document.createElement('select'); s.id = 'accept-challenge-partner'; s.style.marginBottom = '15px'; s.innerHTML = '<option value="">Partnerini Seç</option>';
+                    Object.values(userMap).forEach(p => { if(p.uid !== currentUserID && p.uid !== match.oyuncu1ID) { s.innerHTML += `<option value="${p.uid}">${p.isim || p.email}</option>`; } });
+                    actionButtonsContainer.appendChild(label); actionButtonsContainer.appendChild(s);
+                }
+                const ab = document.createElement('button'); ab.textContent = 'Kabul Et ✅'; ab.className = 'btn-accept'; 
+                ab.onclick = async () => {
+                    let partnerID = null;
+                    if (!(match.macFormati || '').includes('Tekler')) {
+                        const pSelect = document.getElementById('accept-challenge-partner');
+                        if (!pSelect.value) return alert("Lütfen partnerini seç!"); partnerID = pSelect.value;
+                    }
+                    try {
+                        await db.collection('matches').doc(matchDocId).update({ durum: 'Hazır', oyuncu2PartnerID: partnerID });
+                        const myName = userMap[currentUserID]?.isim || 'Rakibin'; const subject = "✅ Maç Teklifin Kabul Edildi!";
+                        const body = `<p><strong>${myName}</strong> maç teklifini kabul etti!</p><p>Hemen uygulamaya girip maç tarihini ve kortu belirleyebilirsiniz.</p><p><a href="https://bursatenisligi.github.io/TenisLig/">Uygulamaya Git</a></p>`;
+                        sendNotificationEmail(match.oyuncu1ID, subject, body);
+                        alert("Kabul edildi! Rakibine mail bildirimi gönderildi. 📨"); goBackToList();
+                    } catch (err) { console.error(err); alert("Kabul edilirken hata oluştu: " + err.message); }
+                };
+                const rb = document.createElement('button'); rb.textContent = 'Reddet ❌'; rb.className = 'btn-reject'; rb.onclick = () => deleteMatch(matchDocId, "Reddedildi."); 
+                actionButtonsContainer.append(ab, rb);
+            } else if (currentUserID === match.oyuncu1ID) {
+                const wb = document.createElement('button'); wb.textContent = 'Geri Çek ↩️'; wb.className = 'btn-withdraw'; wb.onclick = () => deleteMatch(matchDocId, "Geri çekildi."); actionButtonsContainer.appendChild(wb);
+            }
+        } 
+        else if (match.durum === 'Hazır') {
+            scheduleInputSection.style.display = 'block'; 
+            scheduleInputSection.innerHTML = `
+                <button id="btn-toggle-schedule" class="btn-purple" style="width:100%; margin-bottom:10px; display:flex; justify-content:center; align-items:center; gap:10px;"><span>📅</span> Maç Planla / Güncelle</button>
+                <div id="schedule-form-container" style="display:none; background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
+                    <h4 style="margin-top:0; margin-bottom:10px; color:#6f42c1; font-size:0.9em; border-bottom:1px solid #ddd; padding-bottom:5px;">Plan Detayları</h4>
+                    <label class="input-label">Kort Tipi:</label>
+                    <select id="dynamic-court-type"><option value="Toprak">Toprak 🧱</option><option value="Sert">Sert 🟦</option></select>
+                    <label class="input-label">Kort Seçimi:</label>
+                    <select id="dynamic-venue-select"><option value="">Kort Seç</option></select>
+                    <label class="input-label">Tarih ve Saat:</label>
+                    <input type="datetime-local" id="dynamic-time-input">
+                    <button id="dynamic-save-schedule-btn" class="btn-save-schedule" style="margin-top:10px;">Planı Kaydet ✅</button>
+                </div>`;
+
+            const toggleSchedBtn = document.getElementById('btn-toggle-schedule'); const schedContainer = document.getElementById('schedule-form-container');
+            toggleSchedBtn.onclick = () => { const isHidden = schedContainer.style.display === 'none'; schedContainer.style.display = isHidden ? 'block' : 'none'; toggleSchedBtn.style.opacity = isHidden ? '0.9' : '1'; };
+
+            const dVenueSelect = document.getElementById('dynamic-venue-select');
+            COURT_LIST.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if(match.macYeri === c) o.selected = true; dVenueSelect.appendChild(o); });
+            if(match.kortTipi) document.getElementById('dynamic-court-type').value = match.kortTipi;
+            
+            // --- GÜVENLİ ZAMAN INPUT GÜNCELLEMESİ ---
+            if(match.macZamani) { 
+                let jsDate = typeof match.macZamani.toDate === 'function' ? match.macZamani.toDate() : (match.macZamani.seconds !== undefined ? new Date(match.macZamani.seconds * 1000) : null);
+                if (jsDate && !isNaN(jsDate.getTime())) {
+                    const dateVal = new Date(jsDate.getTime() - (jsDate.getTimezoneOffset() * 60000)).toISOString().slice(0,16); 
+                    document.getElementById('dynamic-time-input').value = dateVal; 
+                }
+            }
+            document.getElementById('dynamic-save-schedule-btn').onclick = () => saveMatchSchedule(matchDocId);
+
+            scoreInputSection.style.display = 'block'; 
+            scoreInputSection.innerHTML = `
+                <button id="btn-toggle-score" class="btn-main" style="width:100%; margin-bottom:10px; display:flex; justify-content:center; align-items:center; gap:10px; background: linear-gradient(to right, #ffc107, #ff9800); color:#333;"><span>📝</span> Maç Sonucu Gir</button>
+                <div id="score-form-container" style="display:none; background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #ffeeba;">
+                     <h4 style="margin-top:0; margin-bottom:10px; color:#856404; font-size:0.9em; border-bottom:1px solid #e6dbb9; padding-bottom:5px;">Maç Detayları</h4>
+                     <div style="margin-bottom:15px;">
+                        <label class="input-label" style="color:#856404;">Hangi zeminde oynadınız?</label>
+                        <select id="score-court-type" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e6dbb9;"><option value="Toprak" ${match.kortTipi === 'Toprak' ? 'selected' : ''}>Toprak 🧱</option><option value="Sert" ${match.kortTipi === 'Sert' ? 'selected' : ''}>Sert 🟦</option></select>
+                     </div>
+                     <div class="score-row"><span>1. Set</span><input type="number" id="s1-me" class="score-box" placeholder="P1" value="${match.skor?.s1_me || ''}"><input type="number" id="s1-opp" class="score-box" placeholder="P2" value="${match.skor?.s1_opp || ''}"></div>
+                    <div class="score-row"><span>2. Set</span><input type="number" id="s2-me" class="score-box" placeholder="P1" value="${match.skor?.s2_me || ''}"><input type="number" id="s2-opp" class="score-box" placeholder="P2" value="${match.skor?.s2_opp || ''}"></div>
+                    <div class="score-row"><span>3. Set (Opsiyonel)</span><input type="number" id="s3-me" class="score-box" placeholder="P1" value="${match.skor?.s3_me || ''}"><input type="number" id="s3-opp" class="score-box" placeholder="P2" value="${match.skor?.s3_opp || ''}"></div>
+                    <div id="winner-select-container" style="margin-top: 15px; margin-bottom: 10px;"><label style="font-size:0.85em; color:#856404; font-weight:bold; margin-bottom:5px; display:block;">Kazanan Kim?</label></div>
+                    <button id="dynamic-save-score-btn" class="btn-save" style="margin-top:5px; background-color:#28a745;">Sonucu Kaydet ve Gönder 🚀</button>
+                </div>`;
+
+            const scoreContainer = document.getElementById('score-form-container'); const winnerContainer = document.getElementById('winner-select-container');
+            winnerSelect.style.display = 'block'; winnerSelect.style.marginBottom = '0'; winnerContainer.appendChild(winnerSelect);
+
+            const toggleScoreBtn = document.getElementById('btn-toggle-score');
+            toggleScoreBtn.onclick = () => { const isHidden = scoreContainer.style.display === 'none'; scoreContainer.style.display = isHidden ? 'block' : 'none'; };
+            document.getElementById('dynamic-save-score-btn').onclick = () => saveMatchResult(matchDocId);
+        }
+        else if (match.durum === 'Sonuç_Bekleniyor') {
+            const s = match.skor || {};
+            if (isTourAdmin || match.sonucuGirenID !== currentUserID) {
+                const myS1 = s.s1_opp || 0; const oppS1 = s.s1_me || 0; const myS2 = s.s2_opp || 0; const oppS2 = s.s2_me || 0; const myS3 = s.s3_opp || 0; const oppS3 = s.s3_me || 0;
+                const p1Val = match.oyuncu1ID; const p2Val = match.oyuncu2ID;
+
+                scoreDisplaySection.style.display = 'block';
+                scoreDisplaySection.innerHTML = `
+                    <div style="background:#e3f2fd; padding:15px; border-radius:10px; border:1px solid #bbdefb; text-align:center;">
+                        <h4 style="margin-top:0; color:#0d47a1;">📬 Skor Onayı Bekleniyor</h4>
+                        <div style="font-size:1.2em; font-weight:bold; margin-bottom:10px;">${oppS1}-${myS1}, ${oppS2}-${myS2} ${s.s3_me || s.s3_opp ? `, ${oppS3}-${myS3}` : ''}</div>
+                        <div style="font-size:0.9em; color:#555; margin-bottom:15px;">Kazanan Adayı: <strong>${(match.adayKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></div>
+                        <button id="btn-toggle-approve" class="btn-main" style="background-color:#007bff; width:100%;">⚖️ Skoru İncele / Onayla / Değiştir</button>
+                        <div id="approve-action-area" style="display:none; margin-top:15px; background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd;">
+                            <p style="color:#28a745; font-weight:bold; margin-bottom:5px;">✅ Her şey doğru mu?</p>
+                            <button id="btn-quick-approve" class="btn-approve" style="margin-bottom:20px;">Evet, Skoru Onayla</button>
+                            <hr style="border-top:1px dashed #ccc; margin-bottom:15px;">
+                            <p style="color:#ffc107; font-weight:bold; margin-bottom:10px;">✏️ Yanlışlık mı var? Düzenle ve Gönder:</p>
+                            <label class="input-label">Kazanan Kim?</label>
+                            <select id="change-winner-select"><option value="${p1Val}" ${match.adayKazananID === p1Val ? 'selected' : ''}>${userMap[p1Val]?.isim}</option><option value="${p2Val}" ${match.adayKazananID === p2Val ? 'selected' : ''}>${userMap[p2Val]?.isim}</option></select>
+                            <div class="score-row"><span>1. Set</span><input type="number" id="c-s1-me" class="score-box" value="${myS1}"> <input type="number" id="c-s1-opp" class="score-box" value="${oppS1}"> </div>
+                            <div class="score-row"><span>2. Set</span><input type="number" id="c-s2-me" class="score-box" value="${myS2}"> <input type="number" id="c-s2-opp" class="score-box" value="${oppS2}"> </div>
+                            <div class="score-row"><span>3. Set</span><input type="number" id="c-s3-me" class="score-box" value="${myS3}"> <input type="number" id="c-s3-opp" class="score-box" value="${oppS3}"> </div>
+                            <button id="btn-submit-change" class="btn-save" style="background-color:#ff9800; margin-top:10px;">Değişikliği Gönder 🔄</button>
+                        </div>
+                    </div>`;
+
+                const tglBtn = document.getElementById('btn-toggle-approve'); const actionArea = document.getElementById('approve-action-area');
+                tglBtn.onclick = () => { const isHidden = actionArea.style.display === 'none'; actionArea.style.display = isHidden ? 'block' : 'none'; };
+                document.getElementById('btn-quick-approve').onclick = () => finalizeMatch(matchDocId, match);
+                document.getElementById('btn-submit-change').onclick = () => updateAndResubmitScore(matchDocId);
+            } else {
+                scoreDisplaySection.style.display = 'block';
+                scoreDisplaySection.innerHTML = `
+                    <div style="background:#fff3cd; padding:15px; border-radius:10px; border:1px solid #ffeeba; text-align:center;">
+                        <h4 style="margin:0; color:#856404;">⏳ Onay Bekleniyor</h4>
+                        <p style="margin:5px 0; font-size:0.9em;">Rakibin veya Turnuva Yönetiminin sonucu onaylaması bekleniyor.</p>
+                        <div style="font-weight:bold; margin-top:10px;">Girilen Skor: ${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp}</div>
+                    </div>`;
+            }
+        }
+        else if (match.durum === 'Tamamlandı') {
+            const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
+            scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${(match.kayitliKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></p></div>`;
+        }
+
+        const shareMatchBtn = document.getElementById('btn-share-match-detail');
+        if (shareMatchBtn) {
+            const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
+            newShareBtn.innerHTML = '📸 Instagram\'da Paylaş'; newShareBtn.style.background = 'linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d)';
+            
+            newShareBtn.addEventListener('click', async () => {
+                try { await navigator.clipboard.writeText("https://bursatenisligi.github.io/TenisLig/"); } catch(e) {}
+                alert("Sitenin linki panoya (hafızaya) kopyalanıdı! 📋\n\nResim oluştuktan sonra Instagram hikayenize eklerken 'Çıkartmalar' menüsünden 'Bağlantı' aracını seçip kopyalanan linki direkt yapıştırabilirsiniz.");
+
+                let finalMatchData = null; try { if (typeof match !== 'undefined') finalMatchData = match; } catch (e) {}
+                if (!finalMatchData && typeof currentMatchDocId !== 'undefined' && currentMatchDocId) { try { const doc = await db.collection('matches').doc(currentMatchDocId).get(); finalMatchData = doc.data(); } catch (err) { console.error(err); } }
+                if (!finalMatchData) { alert("Veri yüklenemedi, lütfen sayfayı yenileyin."); return; }
+
+                const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQu6E1MzcuNTg2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
                 
-                newShareBtn.addEventListener('click', async () => {
-                    try { await navigator.clipboard.writeText("https://bursatenisligi.github.io/TenisLig/"); } catch(e) {}
-                    alert("Sitenin linki panoya (hafızaya) kopyalandı! 📋\n\nResim oluştuktan sonra Instagram hikayenize eklerken 'Çıkartmalar' menüsünden 'Bağlantı' aracını seçip kopyalanan linki direkt yapıştırabilirsiniz.");
+                const getU = (id) => userMap[id] || { isim: 'Bilinmeyen', fotoURL: 'https://via.placeholder.com/150' };
+                const p1 = getU(finalMatchData.oyuncu1ID); const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
+                const p2 = getU(finalMatchData.oyuncu2ID); const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
+                
+                let team1Name = p1.isim; if(p1p) team1Name += ` & ${p1p.isim}`;
+                let team2Name = p2.isim; if(p2p) team2Name += ` & ${p2p.isim}`;
+                
+                const wid = finalMatchData.kayitliKazananID || finalMatchData.adayKazananID; 
+                let winnerTeam = "?"; 
+                if (wid) { winnerTeam = (wid === finalMatchData.oyuncu1ID) ? team1Name : team2Name; }
+                
+                let scoreText = "Skor Yok"; 
+                if (finalMatchData.skor) { 
+                    const s = finalMatchData.skor; 
+                    let set1 = (parseInt(s.s1_me||0) + parseInt(s.s1_opp||0)) > 0 ? `${s.s1_me}-${s.s1_opp}` : ''; 
+                    let set2 = (parseInt(s.s2_me||0) + parseInt(s.s2_opp||0)) > 0 ? `, ${s.s2_me}-${s.s2_opp}` : ''; 
+                    let set3 = (parseInt(s.s3_me||0) + parseInt(s.s3_opp||0)) > 0 ? `, ${s.s3_me}-${s.s3_opp}` : ''; 
+                    scoreText = set1 + set2 + set3;
+                    if(scoreText.startsWith(', ')) scoreText = scoreText.substring(2);
+                }
 
-                    let finalMatchData = null; try { if (typeof match !== 'undefined') finalMatchData = match; } catch (e) {}
-                    if (!finalMatchData && typeof currentMatchDocId !== 'undefined' && currentMatchDocId) { try { const doc = await db.collection('matches').doc(currentMatchDocId).get(); finalMatchData = doc.data(); } catch (err) { console.error(err); } }
-                    if (!finalMatchData) { alert("Veri yüklenemedi, lütfen sayfayı yenileyin."); return; }
+                let matchBadgeHTML = '';
+                if (finalMatchData.macTipi === 'Turnuva' && finalMatchData.tournamentId) {
+                    try {
+                        const tDoc = await db.collection('tournaments').doc(finalMatchData.tournamentId).get();
+                        if(tDoc.exists) { matchBadgeHTML = `<div style="background:rgba(255,255,255,0.25); padding:15px 40px; border-radius:40px; margin-top:20px; font-size:2.2em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3); color:#fff; text-shadow:0 2px 5px rgba(0,0,0,0.5);">🏆 ${tDoc.data().name}</div>`; }
+                    } catch(e) {}
+                }
 
-                    const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQuNjE1IDAgMjU2IDB6Ii8+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjMyIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIGQ9Ik0zMzkuMzQ4IDEwOC41NDVjLTQ3LjA2IDUwLjI3Mi03NS45NjIgMTE4LjE1NS03NS45NjIgMTkyLjQ1NXM4MS45NDcgMTM3LjUzNyAxMzUuMTY0IDE4Mi42MzZNMzcuNTg2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
-                    
-                    const getU = (id) => userMap[id] || { isim: 'Bilinmeyen', fotoURL: 'https://via.placeholder.com/150' };
-                    const p1 = getU(finalMatchData.oyuncu1ID); const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
-                    const p2 = getU(finalMatchData.oyuncu2ID); const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
-                    
-                    let team1Name = p1.isim; if(p1p) team1Name += ` & ${p1p.isim}`;
-                    let team2Name = p2.isim; if(p2p) team2Name += ` & ${p2p.isim}`;
-                    
-                    const wid = finalMatchData.kayitliKazananID || finalMatchData.adayKazananID; 
-                    let winnerTeam = "?"; let isTeam1Winner = (wid === finalMatchData.oyuncu1ID);
-                    if (wid) { winnerTeam = isTeam1Winner ? team1Name : team2Name; }
-                    
-                    let scoreText = "Skor Yok"; 
-                    if (finalMatchData.skor) { 
-                        const s = finalMatchData.skor; 
-                        let set1 = (parseInt(s.s1_me||0) + parseInt(s.s1_opp||0)) > 0 ? `${s.s1_me}-${s.s1_opp}` : ''; 
-                        let set2 = (parseInt(s.s2_me||0) + parseInt(s.s2_opp||0)) > 0 ? `, ${s.s2_me}-${s.s2_opp}` : ''; 
-                        let set3 = (parseInt(s.s3_me||0) + parseInt(s.s3_opp||0)) > 0 ? `, ${s.s3_me}-${s.s3_opp}` : ''; 
-                        scoreText = set1 + set2 + set3;
-                        if(scoreText.startsWith(', ')) scoreText = scoreText.substring(2);
-                    }
+                const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
+                let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
+                
+                const cardStyle = "width: 1080px; height: 1920px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); position: fixed; top: -5000px; left: 0; font-family: 'Poppins', sans-serif; display:flex; flex-direction:column; padding: 100px 80px; box-sizing:border-box; color:white; justify-content:space-between; align-items:center; text-align:center;";
+                const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.6); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.8); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👇 Sıralama ve Detaylar İçin Linke Tıkla 👇</div>`;
 
-                    let matchBadgeHTML = '';
-                    if (finalMatchData.macTipi === 'Turnuva' && finalMatchData.tournamentId) {
-                        try {
-                            const tDoc = await db.collection('tournaments').doc(finalMatchData.tournamentId).get();
-                            if(tDoc.exists) { matchBadgeHTML = `<div style="background:rgba(255,255,255,0.25); padding:15px 40px; border-radius:40px; margin-top:20px; font-size:2.2em; font-weight:600; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.3); color:#fff; text-shadow:0 2px 5px rgba(0,0,0,0.5);">🏆 ${tDoc.data().name}</div>`; }
-                        } catch(e) {}
-                    }
-
-                    const tempDiv = document.createElement('div'); tempDiv.id = 'share-card-temp';
-                    let photoUrl = finalMatchData.macFotoURL; let hasPhoto = photoUrl && photoUrl.length > 20 && !photoUrl.includes("placeholder");
-                    
-                    const cardStyle = "width: 1080px; height: 1920px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); position: fixed; top: -5000px; left: 0; font-family: 'Poppins', sans-serif; display:flex; flex-direction:column; padding: 100px 80px; box-sizing:border-box; color:white; justify-content:space-between; align-items:center; text-align:center;";
-                    
-                    const ctaHTML = `<div style="font-size:2.2em; font-weight:700; color:#fff; background:rgba(0,0,0,0.6); padding:20px 50px; border-radius:50px; text-shadow: 0 2px 5px rgba(0,0,0,0.8); margin-bottom:20px; border: 1px solid rgba(255,255,255,0.2);">👇 Sıralama ve Detaylar İçin Linke Tıkla 👇</div>`;
-
-                    let innerContent = '';
-                    if (hasPhoto) {
-                        innerContent = `
-                        <div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;">
-                            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%); z-index:1;"></div>
-                            <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
-                                <div style="display:flex; flex-direction:column; align-items:center;">
-                                    <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
-                                    <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.8);">MAÇ SONUCU</h1>
-                                    ${matchBadgeHTML}
-                                </div>
-                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
-                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team1Name}</div>
-                                    <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.9);">VS</div>
-                                    <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team2Name}</div>
-                                </div>
-                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
-                                    <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">🏆 KAZANAN</h3>
-                                    <div style="font-size:3.8em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.9);">${winnerTeam}</div>
-                                    <div style="border-top:3px dashed rgba(255,255,255,0.6); padding-top:40px; width:80%;">
-                                        <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600; text-shadow: 0 3px 8px rgba(0,0,0,0.9);">SKOR</div>
-                                        <div style="font-size:7em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.9);">${scoreText}</div>
-                                    </div>
-                                </div>
-                                ${ctaHTML}
+                let innerContent = '';
+                if (hasPhoto) {
+                    innerContent = `
+                    <div id="capture-story" style="${cardStyle} background: url('${photoUrl}') center/cover no-repeat;">
+                        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.65) 100%); z-index:1;"></div>
+                        <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
+                            <div style="display:flex; flex-direction:column; align-items:center;">
+                                <img src="${SAFE_LOGO}" style="width:150px; height:150px; margin-bottom:20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                                <h1 style="margin:0; font-size:4.5em; font-weight:900; letter-spacing:3px; text-shadow: 0 4px 15px rgba(0,0,0,0.8);">MAÇ SONUCU</h1>
+                                ${matchBadgeHTML}
                             </div>
-                        </div>`;
-                    } else {
-                        innerContent = `
-                        <div id="capture-story" style="${cardStyle}">
-                            <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
-                                <div style="display:flex; flex-direction:column; align-items:center;">
-                                    <img src="${SAFE_LOGO}" style="width:180px; height:180px; margin-bottom:30px;">
-                                    <h1 style="margin:0; font-size:5.5em; font-weight:900; letter-spacing:4px; text-shadow: 0 5px 15px rgba(0,0,0,0.4);">MAÇ SONUCU</h1>
-                                    ${matchBadgeHTML}
-                                </div>
-                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
-                                    <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team1Name}</div>
-                                    <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div>
-                                    <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2Name}</div>
-                                </div>
-                                <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
-                                    <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
-                                    <div style="font-size:4em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.5);">${winnerTeam}</div>
-                                    <div style="border-top:3px dashed rgba(255,255,255,0.4); padding-top:40px; width:80%;">
-                                        <div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div>
-                                        <div style="font-size:7.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.5);">${scoreText}</div>
-                                    </div>
-                                </div>
-                                ${ctaHTML}
+                            <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
+                                <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team1Name}</div>
+                                <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.9);">VS</div>
+                                <div style="font-size:3.5em; font-weight:800; text-shadow: 0 5px 15px rgba(0,0,0,0.8);">${team2Name}</div>
                             </div>
-                        </div>`;
-                    }
-                    tempDiv.innerHTML = innerContent; document.body.appendChild(tempDiv);
+                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
+                                <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.5em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.9);">🏆 KAZANAN</h3>
+                                <div style="font-size:3.8em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.9);">${winnerTeam}</div>
+                                <div style="border-top:3px dashed rgba(255,255,255,0.6); padding-top:40px; width:80%;">
+                                    <div style="font-size:2.2em; color:#ddd; margin-bottom:15px; font-weight:600; text-shadow: 0 3px 8px rgba(0,0,0,0.9);">SKOR</div>
+                                    <div style="font-size:7em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.9);">${scoreText}</div>
+                                </div>
+                            </div>
+                            ${ctaHTML}
+                        </div>
+                    </div>`;
+                } else {
+                    innerContent = `
+                    <div id="capture-story" style="${cardStyle}">
+                        <div style="position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:space-between; height:100%;">
+                            <div style="display:flex; flex-direction:column; align-items:center;">
+                                <img src="${SAFE_LOGO}" style="width:180px; height:180px; margin-bottom:30px;">
+                                <h1 style="margin:0; font-size:5.5em; font-weight:900; letter-spacing:4px; text-shadow: 0 5px 15px rgba(0,0,0,0.4);">MAÇ SONUCU</h1>
+                                ${matchBadgeHTML}
+                            </div>
+                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; gap: 50px;">
+                                <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team1Name}</div>
+                                <div style="font-size:3em; color:#ffc107; font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">VS</div>
+                                <div style="font-size:3.8em; font-weight:800; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">${team2Name}</div>
+                            </div>
+                            <div style="width:100%; display:flex; flex-direction:column; align-items:center; margin-top:20px;">
+                                <h3 style="margin:0 0 20px 0; color:#ffc107; font-size:2.8em; font-weight:900; text-transform:uppercase; letter-spacing:2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">🏆 KAZANAN</h3>
+                                <div style="font-size:4em; font-weight:900; margin-bottom:40px; line-height:1.2; text-shadow: 0 5px 15px rgba(0,0,0,0.5);">${winnerTeam}</div>
+                                <div style="border-top:3px dashed rgba(255,255,255,0.4); padding-top:40px; width:80%;">
+                                    <div style="font-size:2.2em; color:#eee; margin-bottom:15px; font-weight:600;">SKOR</div>
+                                    <div style="font-size:7.5em; font-weight:900; color:#00ff88; letter-spacing:5px; line-height:1; text-shadow: 0 5px 20px rgba(0,0,0,0.5);">${scoreText}</div>
+                                </div>
+                            </div>
+                            ${ctaHTML}
+                        </div>
+                    </div>`;
+                }
+                tempDiv.innerHTML = innerContent; document.body.appendChild(tempDiv);
 
-                    await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1000));
 
-                    if (typeof shareElementAsImage === 'function') { 
-                        await shareElementAsImage('capture-story', 'mac-sonucu', 'btn-share-match-detail'); 
-                    } else { alert("Hata: Görüntü fonksiyonu bulunamadı."); }
-                    
-                    setTimeout(() => { if(document.body.contains(tempDiv)) document.body.removeChild(tempDiv); }, 1000);
-                });
-            }
-        }).catch(err => {
-            console.error("Match yüklenirken hata:", err);
-            detailMatchInfo.innerHTML = '<p style="color:red;">Maç detayları yüklenirken bir hata oluştu.</p>';
-        });
-    }
-
+                if (typeof shareElementAsImage === 'function') { 
+                    await shareElementAsImage('capture-story', 'mac-sonucu', 'btn-share-match-detail'); 
+                } else { alert("Hata: Görüntü fonksiyonu bulunamadı."); }
+                
+                setTimeout(() => { if(document.body.contains(tempDiv)) document.body.removeChild(tempDiv); }, 1000);
+            });
+        }
+    }).catch(err => {
+        console.error("Match yüklenirken hata:", err);
+        detailMatchInfo.innerHTML = '<p style="color:red;">Maç detayları yüklenirken bir hata oluştu.</p>';
+    });
+}
     async function updateMatchStatus(id, st, msg) { await db.collection('matches').doc(id).update({durum:st}); alert(msg); goBackToList(); }
     async function deleteMatch(id, msg) { await db.collection('matches').doc(id).delete(); alert(msg); goBackToList(); }
     
