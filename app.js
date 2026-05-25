@@ -1850,22 +1850,26 @@ function showNotification(msg, type='info') {
     if(closeChatModal) { closeChatModal.onclick = () => { chatModal.style.display = 'none'; if (currentChatUnsubscribe) currentChatUnsubscribe(); }; }
     if (clearChatBtn) clearChatBtn.addEventListener('click', clearChatMessages);
 
-    async function runLeagueMaintenance() {
-        console.log("Lig bakımı başlatılıyor..."); const now = new Date(); const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000; 
-        try {
-            const batch = db.batch(); let operationCount = 0;
-            const pendingSnap = await db.collection('matches').where('durum', '==', 'Bekliyor').get();
-            pendingSnap.forEach(doc => {
-                const m = doc.data(); const createDate = m.tarih ? m.tarih.toDate() : null;
-                if (createDate && (now - createDate) > FIVE_DAYS_MS) { batch.delete(db.collection('matches').doc(doc.id)); operationCount++; }
-            });
+ async function runLeagueMaintenance() {
+    console.log("Lig bakımı başlatılıyor..."); const now = new Date(); const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000; 
+    try {
+        const batch = db.batch(); let operationCount = 0;
+        const pendingSnap = await db.collection('matches').where('durum', '==', 'Bekliyor').get();
+        pendingSnap.forEach(doc => {
+            const m = doc.data(); const createDate = m.tarih ? m.tarih.toDate() : null;
+            if (m.macTipi === 'Turnuva') return; // 💡 TURNUVA MAÇLARINI KORU
+            if (createDate && (now - createDate) > FIVE_DAYS_MS) { batch.delete(db.collection('matches').doc(doc.id)); operationCount++; }
+        });
 
-            const readySnap = await db.collection('matches').where('durum', '==', 'Hazır').get();
-            readySnap.forEach(doc => {
-                const m = doc.data(); const matchId = doc.id; const matchRef = db.collection('matches').doc(matchId); const createdDate = m.tarih ? m.tarih.toDate() : null; const scheduledDate = m.macZamani ? m.macZamani.toDate() : null;
-                if (!scheduledDate && createdDate) { if ((now - createdDate) > FIVE_DAYS_MS) { batch.delete(matchRef); operationCount++; } }
-                if (scheduledDate) { if ((now - scheduledDate) > FIVE_DAYS_MS) { batch.delete(matchRef); operationCount++; } }
-            });
+        const readySnap = await db.collection('matches').where('durum', '==', 'Hazır').get();
+        readySnap.forEach(doc => {
+            const m = doc.data(); const matchId = doc.id; const matchRef = db.collection('matches').doc(matchId); const createdDate = m.tarih ? m.tarih.toDate() : null; const scheduledDate = m.macZamani ? m.macZamani.toDate() : null;
+            if (m.macTipi === 'Turnuva') return; // 💡 TURNUVA MAÇLARINI KORU
+            if (!scheduledDate && createdDate) { if ((now - createdDate) > FIVE_DAYS_MS) { batch.delete(matchRef); operationCount++; } }
+            if (scheduledDate) { if ((now - scheduledDate) > FIVE_DAYS_MS) { batch.delete(matchRef); operationCount++; } }
+        });
+        
+        // ... (Geri kalan kodlar aynen devam ediyor)
 
             const approvalSnap = await db.collection('matches').where('durum', '==', 'Sonuç_Bekleniyor').get();
             for (const doc of approvalSnap.docs) {
@@ -3796,7 +3800,7 @@ const getPlayerFullName = (p) => {
                     const isP1Win = m.winner && m.winner.p1 === m.p1?.p1; 
                     const isP2Win = m.winner && m.winner.p1 === m.p2?.p1;
                     leagueHTML += `
-                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${m.winner ? '#28a745' : '#ccc'}; width:100%; min-width:unset;" onclick="returnToTab = 'tab-tournaments'; showMatchDetail('${m.firestoreMatchId}')">
+                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${m.winner ? '#28a745' : '#ccc'}; width:100%; min-width:unset;" onclick="returnToTab = 'tab-tournaments'; window.verifyAndShowMatch('${tourId}', '${m.matchId || m.matchTag}', '${m.firestoreMatchId}')">
                             <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(m.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
                             <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(m.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
                         </div>`;
@@ -3886,7 +3890,7 @@ const getPlayerFullName = (p) => {
                     const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; 
                     const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
                     html += `
-                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'}; min-width:unset; width:100%;" onclick="returnToTab = 'tab-tournaments'; showMatchDetail('${match.firestoreMatchId}')">
+                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'}; min-width:unset; width:100%;" onclick="returnToTab = onclick="returnToTab = 'tab-tournaments'; window.verifyAndShowMatch('${tourId}', '${match.matchId || match.matchTag}', '${match.firestoreMatchId}')">
                             <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
                             <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
                         </div>
@@ -3938,9 +3942,9 @@ const getPlayerFullName = (p) => {
                     `;
 
                     if (match.firestoreMatchId) {
-                        matchDiv.style.border = "1px solid #c06035"; matchDiv.style.cursor = "pointer";
-                        matchDiv.onclick = () => { returnToTab = 'tab-tournaments'; showMatchDetail(match.firestoreMatchId); };
-                    }
+    matchDiv.style.border = "1px solid #c06035"; matchDiv.style.cursor = "pointer";
+    matchDiv.onclick = () => { returnToTab = 'tab-tournaments'; window.verifyAndShowMatch(tourId, match.matchTag || match.matchId, match.firestoreMatchId); };
+}
                     roundDiv.appendChild(matchDiv);
                 });
                 treeScrollArea.appendChild(roundDiv);
@@ -4919,4 +4923,65 @@ window.generateAutoTeams = async function(tourId) {
             console.log(`WhatsApp ${type} bildirimi başarıyla gönderildi! 🚀`);
         } catch (error) { console.error("💥 WhatsApp tur/şampiyonluk bildirim hatası:", error); }
     };
+    window.verifyAndShowMatch = async function(tourId, matchTag, firestoreMatchId) {
+    if (!firestoreMatchId) return alert("Maç kimliği bulunamadı.");
+    
+    db.collection('matches').doc(firestoreMatchId).get().then(async doc => {
+        if (doc.exists) {
+            showMatchDetail(firestoreMatchId);
+        } else {
+            console.log(`Maç silinmiş (${firestoreMatchId}), otomatik onarılıyor...`);
+            try {
+                const tourRef = db.collection('tournaments').doc(tourId);
+                const tourSnap = await tourRef.get();
+                if (!tourSnap.exists) return alert("Turnuva bulunamadı.");
+                const tourData = tourSnap.data();
+                
+                let targetMatchObj = null;
+                let isGroup = matchTag.startsWith('G');
+                
+                if (isGroup) {
+                    const gIdx = parseInt(matchTag.split('_')[0].replace('G',''));
+                    targetMatchObj = tourData.groups?.[gIdx]?.matches?.find(m => m.matchId === matchTag);
+                } else {
+                    tourData.bracket.forEach(round => {
+                        round.matches.forEach(m => {
+                            if (m.matchId === matchTag || m.matchTag === matchTag) targetMatchObj = m;
+                        });
+                    });
+                }
+                
+                if (!targetMatchObj || !targetMatchObj.p1 || !targetMatchObj.p2) {
+                    return alert("Maçın eşleşme bilgileri bulunamadığı için onarılamadı.");
+                }
+                
+                // Silinen dökümanı matches koleksiyonunda yeniden oluştur
+                const newMatchId = await window.createTournamentMatchDoc(tourId, targetMatchObj.p1, targetMatchObj.p2, targetMatchObj.roundName || "Turnuva Maçı", matchTag);
+                
+                // Turnuva kurgusunda eskiyen ID'yi yenisiyle değiştir
+                if (isGroup) {
+                    const gIdx = parseInt(matchTag.split('_')[0].replace('G',''));
+                    const mIdx = tourData.groups[gIdx].matches.findIndex(m => m.matchId === matchTag);
+                    if (mIdx !== -1) tourData.groups[gIdx].matches[mIdx].firestoreMatchId = newMatchId;
+                } else {
+                    tourData.bracket.forEach(round => {
+                        round.matches.forEach(m => {
+                            if (m.matchId === matchTag || m.matchTag === matchTag) m.firestoreMatchId = newMatchId;
+                        });
+                    });
+                }
+                
+                await tourRef.update({ groups: tourData.groups || null, bracket: tourData.bracket || null });
+                alert("⚠️ Bu maç sistem temizliği sırasında silinmişti. Organizatör yetkinizle otomatik olarak yeniden oluşturuldu ve turnuvaya bağlandı! Şimdi skor girebilirsiniz. ✅");
+                showMatchDetail(newMatchId);
+                
+            } catch (err) {
+                console.error("Maç onarma hatası:", err);
+                alert("Maç otomatik onarılamadı: " + err.message);
+            }
+        }
+    }).catch(err => {
+        showMatchDetail(firestoreMatchId);
+    });
+};
 }); // DOMContentLoaded SONU
