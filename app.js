@@ -835,31 +835,37 @@ function analyzeStats(matches) {
     }
 
 function openLobbyDetail(type, data) {
-        const modal = document.getElementById('lobby-detail-modal'); const content = document.getElementById('lobby-detail-content'); let html = '';
-        if (type === 'result') {
-            html = `<div class="detail-big-icon">🏁</div><h3>Maç Sonucu</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">VS</div><div class="detail-player-box"><img src="${data.p2Photo}" class="detail-avatar"><div>${data.p2Name}</div></div></div><div style="font-size:1.5em; font-weight:bold; margin-bottom:15px; color:#28a745;">${data.scoreStr}</div><div class="detail-commentary">${data.commentary}</div><button onclick="document.getElementById('lobby-detail-modal').style.display='none'; showMatchDetail('${data.matchId}')" class="btn-main">Maç Detayına Git</button>`;
-        } else if (type === 'ad') {
-            // --- ÇİFTLER İÇİN PARTNER SEÇİM KUTUSU ---
-            let partnerSelectHTML = '';
-            if (!(data.macFormati || '').includes('Tekler') && data.isEligible) {
-                let options = '<option value="">Takım Arkadaşını Seç</option>';
-                Object.values(userMap).forEach(p => {
-                    if (p.uid !== auth.currentUser.uid && p.uid !== data.oyuncu1ID) {
-                        options += `<option value="${p.uid}">${p.isim || p.email}</option>`;
-                    }
-                });
-                partnerSelectHTML = `<div style="margin-bottom:15px; text-align:left;"><label style="font-size:0.85em; font-weight:bold; color:#555;">Bu bir çiftler maçı. Partnerini seç:</label><select id="accept-ad-partner" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; margin-top:5px;">${options}</select></div>`;
-            }
-            // ------------------------------------------
-
-            let btnHTML = data.isEligible ? `<button class="btn-main" style="background:#28a745;" onclick="acceptOpenRequest('${data.matchId}', ${data.wager}, '${data.matchType}', '${data.macFormati}')">✅ Meydan Okumayı Kabul Et</button>` : `<button class="btn-main" style="background:#ccc; cursor:not-allowed;" disabled>🔒 Ligin Yetmiyor</button>`;
-            
-            html = `<div class="detail-big-icon">${data.isChallenge ? '🔥' : '🤝'}</div><h3>${data.headerTitle}</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">?</div><div class="detail-player-box"><div style="width:60px; height:60px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; margin:0 auto 5px auto; font-size:20px; color:#999;">👤</div><div>Rakip Aranıyor</div></div></div><div style="background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:15px; color:#856404; font-weight:bold;">Bahis: ${data.wager} Puan</div><div class="detail-commentary">${data.commentary}</div>${partnerSelectHTML}${btnHTML}`;
-        } else if (type === 'schedule') {
-            html = `<div class="detail-big-icon">📅</div><h3>Maç Planı</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">VS</div><div class="detail-player-box"><img src="${data.p2Photo}" class="detail-avatar"><div>${data.p2Name}</div></div></div><div class="detail-commentary"><strong>Zaman:</strong> ${data.timeStr}<br><strong>Yer:</strong> ${data.location}<br><br>${data.contextMsg}</div><button onclick="document.getElementById('lobby-detail-modal').style.display='none'; showMatchDetail('${data.matchId}')" class="btn-main">Detayları Gör</button>`;
+    const modal = document.getElementById('lobby-detail-modal'); const content = document.getElementById('lobby-detail-content'); let html = '';
+    if (type === 'result') {
+        html = `<div class="detail-big-icon">🏁</div><h3>Maç Sonucu</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">VS</div><div class="detail-player-box"><img src="${data.p2Photo}" class="detail-avatar"><div>${data.p2Name}</div></div></div><div style="font-size:1.5em; font-weight:bold; margin-bottom:15px; color:#28a745;">${data.scoreStr}</div><div class="detail-commentary">${data.commentary}</div><button onclick="document.getElementById('lobby-detail-modal').style.display='none'; showMatchDetail('${data.matchId}')" class="btn-main">Maç Detayına Git</button>`;
+    } else if (type === 'ad') {
+        // --- ÇİFTLER İÇİN PARTNER SEÇİM KUTUSU (BAŞKASI TIKLADIYSA GÖSTER) ---
+        let partnerSelectHTML = '';
+        if (!(data.macFormati || '').includes('Tekler') && data.isEligible && data.oyuncu1ID !== auth.currentUser.uid) {
+            let options = '<option value="">Takım Arkadaşını Seç</option>';
+            Object.values(userMap).forEach(p => {
+                if (p.uid !== auth.currentUser.uid && p.uid !== data.oyuncu1ID) {
+                    options += `<option value="${p.uid}">${p.isim || p.email}</option>`;
+                }
+            });
+            partnerSelectHTML = `<div style="margin-bottom:15px; text-align:left;"><label style="font-size:0.85em; font-weight:bold; color:#555;">Bu bir çiftler maçı. Partnerini seç:</label><select id="accept-ad-partner" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; margin-top:5px;">${options}</select></div>`;
         }
-        content.innerHTML = html; modal.style.display = 'flex';
+        // ------------------------------------------------------------------
+
+        // 💡 AKILLI BUTON KONTROLÜ: İlan sahibiyse kaldır, başkasıysa kabul et butonu bas
+        let btnHTML = '';
+        if (data.oyuncu1ID === auth.currentUser.uid) {
+            btnHTML = `<button class="btn-main" style="background:#dc3545;" onclick="document.getElementById('lobby-detail-modal').style.display='none'; showMatchDetail('${data.matchId}')">🔍 İlanı Gör / Kaldır 🗑️</button>`;
+        } else {
+            btnHTML = data.isEligible ? `<button class="btn-main" style="background:#28a745;" onclick="acceptOpenRequest('${data.matchId}', ${data.wager}, '${data.matchType}', '${data.macFormati}')">✅ Meydan Okumayı Kabul Et</button>` : `<button class="btn-main" style="background:#ccc; cursor:not-allowed;" disabled>🔒 Ligin Yetmiyor</button>`;
+        }
+        
+        html = `<div class="detail-big-icon">${data.isChallenge ? '🔥' : '🤝'}</div><h3>${data.headerTitle}</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">?</div><div class="detail-player-box"><div style="width:60px; height:60px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; margin:0 auto 5px auto; font-size:20px; color:#999;">👤</div><div>Rakip Aranıyor</div></div></div><div style="background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:15px; color:#856404; font-weight:bold;">Bahis: ${data.wager} Puan</div><div class="detail-commentary">${data.commentary}</div>${partnerSelectHTML}${btnHTML}`;
+    } else if (type === 'schedule') {
+        html = `<div class="detail-big-icon">📅</div><h3>Maç Planı</h3><div class="detail-players"><div class="detail-player-box"><img src="${data.p1Photo}" class="detail-avatar"><div>${data.p1Name}</div></div><div class="detail-vs">VS</div><div class="detail-player-box"><img src="${data.p2Photo}" class="detail-avatar"><div>${data.p2Name}</div></div></div><div class="detail-commentary"><strong>Zaman:</strong> ${data.timeStr}<br><strong>Yer:</strong> ${data.location}<br><br>${data.contextMsg}</div><button onclick="document.getElementById('lobby-detail-modal').style.display='none'; showMatchDetail('${data.matchId}')" class="btn-main">Detayları Gör</button>`;
     }
+    content.innerHTML = html; modal.style.display = 'flex';
+}
 
 async function loadAnnouncements() {
         if (!announcementsContainer) return; announcementsContainer.innerHTML = `<p style="text-align:center; color:#999; margin-top:10px;">Yükleniyor...</p>`;
@@ -899,46 +905,50 @@ async function loadAnnouncements() {
     }
 
 function loadOpenRequests() {
-        if(!openRequestsContainer) return; openRequestsContainer.innerHTML = '<p style="text-align:center; color:#999; margin-top:10px;">Yükleniyor...</p>';
-        const currentUserID = auth.currentUser.uid; const myLeague = getPlayerLeague(userMap[currentUserID]?.toplamPuan || 0);
-        db.collection('matches').where('durum', '==', 'Acik_Ilan').orderBy('tarih', 'desc').get().then(snapshot => {
-            openRequestsContainer.innerHTML = '';
-            if(snapshot.empty) { openRequestsContainer.innerHTML = '<p style="text-align:center; color:#999; font-size:0.9em; padding:10px;">Açık ilan yok.</p>'; return; }
-            snapshot.forEach(doc => {
-                const data = doc.data(); if(data.oyuncu1ID === currentUserID) return;
-                const p1 = userMap[data.oyuncu1ID]; const p1Name = p1?.isim || 'Bilinmiyor';
-                
-                // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
-                let team1Name = p1Name.split(' ')[0];
-                if (!(data.macFormati || '').includes('Tekler') && data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
-                    team1Name += ` & ${userMap[data.oyuncu1PartnerID].isim.split(' ')[0]}`;
-                }
-                // ------------------------------------
+    if(!openRequestsContainer) return; openRequestsContainer.innerHTML = '<p style="text-align:center; color:#999; margin-top:10px;">Yükleniyor...</p>';
+    const currentUserID = auth.currentUser.uid; const myLeague = getPlayerLeague(userMap[currentUserID]?.toplamPuan || 0);
+    db.collection('matches').where('durum', '==', 'Acik_Ilan').orderBy('tarih', 'desc').get().then(snapshot => {
+        openRequestsContainer.innerHTML = '';
+        if(snapshot.empty) { openRequestsContainer.innerHTML = '<p style="text-align:center; color:#999; font-size:0.9em; padding:10px;">Açık ilan yok.</p>'; return; }
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const p1 = userMap[data.oyuncu1ID]; const p1Name = p1?.isim || 'Bilinmeyen';
+            
+            // --- ÇİFTLER İÇİN TAKIM İSİMLERİ ---
+            let team1Name = p1Name.split(' ')[0];
+            if (!(data.macFormati || '').includes('Tekler') && data.oyuncu1PartnerID && userMap[data.oyuncu1PartnerID]) {
+                team1Name += ` & ${userMap[data.oyuncu1PartnerID].isim.split(' ')[0]}`;
+            }
+            // ------------------------------------
 
-                const isChallenge = data.macTipi === 'Meydan Okuma'; const badgeClass = isChallenge ? 'bg-orange-light' : 'bg-green-light'; const badgeText = isChallenge ? `${data.bahisPuani} P` : 'Dostluk';
-                const allowed = data.allowedLeagues || ['Bronz', 'Gümüş', 'Altın']; const isEligible = allowed.includes(myLeague);
-                const commentary = generateAdvancedCommentary('open_ad', { p1Name: team1Name, wager: data.bahisPuani, matchId: doc.id });
-                
-                const modalData = { 
-                    p1Name: team1Name, 
-                    p1Photo: p1?.fotoURL || getSafeAvatar(p1Name), 
-                    wager: data.bahisPuani, 
-                    matchType: data.macTipi, 
-                    macFormati: data.macFormati || 'Tekler',
-                    commentary, 
-                    matchId: doc.id, 
-                    isEligible, 
-                    isChallenge, 
-                    headerTitle: isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı',
-                    oyuncu1ID: data.oyuncu1ID 
-                };
+            const isChallenge = data.macTipi === 'Meydan Okuma'; const badgeClass = isChallenge ? 'bg-orange-light' : 'bg-green-light'; const badgeText = isChallenge ? `${data.bahisPuani} P` : 'Dostluk';
+            const allowed = data.allowedLeagues || ['Bronz', 'Gümüş', 'Altın']; const isEligible = allowed.includes(myLeague);
+            const commentary = generateAdvancedCommentary('open_ad', { p1Name: team1Name, wager: data.bahisPuani, matchId: doc.id });
+            
+            const modalData = { 
+                p1Name: team1Name, 
+                p1Photo: p1?.fotoURL || getSafeAvatar(p1Name), 
+                wager: data.bahisPuani, 
+                matchType: data.macTipi, 
+                macFormati: data.macFormati || 'Tekler',
+                commentary, 
+                matchId: doc.id, 
+                isEligible, 
+                isChallenge, 
+                headerTitle: isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı',
+                oyuncu1ID: data.oyuncu1ID 
+            };
 
-                const div = document.createElement('div'); div.className = 'compact-news-row'; if(!isEligible) div.style.opacity = '0.6'; div.onclick = () => openLobbyDetail('ad', modalData);
-                div.innerHTML = `<div class="compact-left"><img src="${p1?.fotoURL || getSafeAvatar(p1Name)}" class="compact-avatar"></div><div class="compact-mid"><div class="compact-title">${team1Name}</div><div class="compact-subtitle">${isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı'} ${!(data.macFormati || '').includes('Tekler') ? '(Çiftler 👥)' : ''}</div></div><div class="compact-right"><span class="compact-badge ${badgeClass}">${badgeText}</span></div>`;
-                openRequestsContainer.appendChild(div);
-            });
+            // 💡 KONTROL: Eğer ilan şu an giriş yapmış kullanıcıya aitse etiket ekle
+            const isMyAd = data.oyuncu1ID === currentUserID;
+            const subTitleLabel = `${isChallenge ? 'Meydan Okuma' : 'Dostluk Maçı'} ${!(data.macFormati || '').includes('Tekler') ? '(Çiftler 👥)' : ''}` + (isMyAd ? ' <span style="color:#e65100; font-weight:bold;">(Benim İlanım 📢)</span>' : '');
+
+            const div = document.createElement('div'); div.className = 'compact-news-row'; if(!isEligible && !isMyAd) div.style.opacity = '0.6'; div.onclick = () => openLobbyDetail('ad', modalData);
+            div.innerHTML = `<div class="compact-left"><img src="${p1?.fotoURL || getSafeAvatar(p1Name)}" class="compact-avatar"></div><div class="compact-mid"><div class="compact-title">${team1Name}</div><div class="compact-subtitle">${subTitleLabel}</div></div><div class="compact-right"><span class="compact-badge ${badgeClass}">${badgeText}</span></div>`;
+            openRequestsContainer.appendChild(div);
         });
-    }
+    });
+}
 
 function loadScheduledMatches() {
         if(!scheduledMatchesContainer) return; scheduledMatchesContainer.innerHTML = '<p style="text-align:center; color:#999; margin-top:10px;">Yükleniyor...</p>';
