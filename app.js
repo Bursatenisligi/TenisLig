@@ -2776,63 +2776,103 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
     }
 
     
-// --- YÖNETİCİ: HATALI MAÇLARI VE MANUEL OYUNCU DEĞİŞİKLİKLERİNİ TABLOYA ZORLA İŞLEME (SÜPER SENKRONİZASYON) ---
- // --- YÖNETİCİ: HATALI MAÇLARI VE MANUEL OYUNCU DEĞİŞİKLİKLERİNİ TABLOYA ZORLA İŞLEME (ULTRA SENKRONİZASYON) ---
 // --- ORGANİZATÖR: HEM TABLOYU HEM OYUNCU PUANLARINI VE ROZETLERİ ONARAN SÜPER MOTOR ---
-    window.syncTournamentMatches = async function(tourId) {
-        if (!confirm("DİKKAT: Bu işlem tüm turnuva maçlarını tarayacak, puanları ÇİFTLER LİGİNE aktaracak, eksik istatistikleri ve ROZETLERİ tamamlayacaktır. Onaylıyor musunuz?")) return;
-        try {
-            const container = document.getElementById('tournament-detail-view');
-            container.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#d35400;">Derin onarım başlatıldı... Lütfen sekmeyi kapatmayın ⏳</p>';
+window.syncTournamentMatches = async function(tourId) {
+    if (!confirm("DİKKAT: Bu işlem tüm turnuva maçlarını tarayacak, puanları ÇİFTLER LİGİNE aktaracak, eksik istatistikleri ve ROZETLERİ tamamlayacaktır. Onaylıyor musunuz?")) return;
+    try {
+        const container = document.getElementById('tournament-detail-view');
+        container.innerHTML = '<p style="text-align:center; margin-top:50px; font-weight:bold; color:#d35400;">Derin onarım başlatıldı... Lütfen sekmeyi kapatmayın ⏳</p>';
 
-            const tourRef = db.collection('tournaments').doc(tourId);
-            const tourSnap = await tourRef.get();
-            const tourData = tourSnap.data();
+        const tourRef = db.collection('tournaments').doc(tourId);
+        const tourSnap = await tourRef.get();
+        const tourData = tourSnap.data();
 
-            const matchSnap = await db.collection('matches')
-                .where('tournamentId', '==', tourId)
-                .where('durum', '==', 'Tamamlandı')
-                .get();
-                
-            let repairCount = 0;
-            const batch = db.batch();
-            let uniqueUsersToBadge = new Set(); // Rozet onarımı için
-
-            for (const doc of matchSnap.docs) {
-                const m = doc.data();
-                const wid = m.kayitliKazananID;
-                
-                // Oyuncuları rozet havuzuna ekle
-                if(m.oyuncu1ID) uniqueUsersToBadge.add(m.oyuncu1ID);
-                if(m.oyuncu2ID) uniqueUsersToBadge.add(m.oyuncu2ID);
-                if(m.oyuncu1PartnerID) uniqueUsersToBadge.add(m.oyuncu1PartnerID);
-                if(m.oyuncu2PartnerID) uniqueUsersToBadge.add(m.oyuncu2PartnerID);
-
-                if ((m.macFormati || '').includes('Tekler') && (m.oyuncu1PartnerID || m.oyuncu2PartnerID)) { batch.update(doc.ref, { macFormati: 'Çiftler' }); }
-
-                if (m.matchTag && wid) {
-                    await window.advanceTournamentBracket(tourId, m.matchTag, wid);
-                }
-                repairCount++;
-            }
-
-            await batch.commit();
+        const matchSnap = await db.collection('matches')
+            .where('tournamentId', '==', tourId)
+            .where('durum', '==', 'Tamamlandı')
+            .get();
             
-            // Geriye dönük eksik ROZETLERİ dağıt
-            const badgeFunc = window.checkAndGrantBadges || checkAndGrantBadges;
-            if (typeof badgeFunc === 'function') {
-                for (let uid of uniqueUsersToBadge) {
-                    await badgeFunc(uid);
-                }
-            }
+        let repairCount = 0;
+        const batch = db.batch();
+        let uniqueUsersToBadge = new Set(); // Rozet onarımı için
 
-            alert(`Onarım Tamamlandı! ${repairCount} maç tarandı, formatlar ve ROZETLER düzeltildi. ✅ \n\nNot: Değişiklikleri tam görmek için sayfayı yenileyin.`);
-            openTournamentDetail(tourId, (await tourRef.get()).data());
-        } catch (e) {
-            console.error(e);
-            alert("Onarım sırasında hata: " + e.message);
+        // 1. ADIM: Tüm bitmiş maçları sırayla tarayıp puanları ve ağacı hesaplat
+        for (const doc of matchSnap.docs) {
+            const m = doc.data();
+            const wid = m.kayitliKazananID;
+            
+            if(m.oyuncu1ID) uniqueUsersToBadge.add(m.oyuncu1ID);
+            if(m.oyuncu2ID) uniqueUsersToBadge.add(m.oyuncu2ID);
+            if(m.oyuncu1PartnerID) uniqueUsersToBadge.add(m.oyuncu1PartnerID);
+            if(m.oyuncu2PartnerID) uniqueUsersToBadge.add(m.oyuncu2PartnerID);
+
+            if ((m.macFormati || '').includes('Tekler') && (m.oyuncu1PartnerID || m.oyuncu2PartnerID)) { batch.update(doc.ref, { macFormati: 'Çiftler' }); }
+
+            if (m.matchTag && wid) {
+                await window.advanceTournamentBracket(tourId, m.matchTag, wid);
+            }
+            repairCount++;
         }
-    };
+
+        await batch.commit();
+        
+        // 🚀 2. ADIM [MÜHÜRLEYİCİ KORUMA]: Döngü bitti! Şimdi veritabanından en güncel nihai ağacı çekip takası kalıcı olarak yapıyoruz.
+        const finalTourSnap = await tourRef.get();
+        const finalTourData = finalTourSnap.data();
+        
+        if (finalTourData.groups && finalTourData.groups.length === 3 && finalTourData.advancingCount === 2 && finalTourData.bracket && finalTourData.bracket[0]) {
+            let bracket = finalTourData.bracket;
+            const m1 = bracket[0].matches[1]; // Normalde A2 vs B2 olan maç kartı
+            const m3 = bracket[0].matches[3]; // Normalde C1 vs C2 olan maç kartı
+            
+            // Koltuklarda oturanların A2 ve C2 adayları/kesinleşenleri olduğunu doğrula
+            if (m1 && m3 && m1.p1 && m3.p2 && (m1.p1.groupName === 'A' || m1.p1.groupIdx === 0) && (m3.p2.groupName === 'C' || m3.p2.groupIdx === 2)) {
+                console.log("🎯 Canlı onarım kilidi: Son aşama Çaprazlama (Swap) devreye giriyor...");
+                
+                // Oyuncuların yerlerini turnuva ağacında (bracket) değiştir
+                const tempPlayer = m1.p1;
+                m1.p1 = m3.p2;  // A2 koltuğuna artık C2 oturdu! (Maç: C2 vs B2 oldu)
+                m3.p2 = tempPlayer; // C2 koltuğuna artık A2 oturdu! (Maç: C1 vs A2 oldu)
+                
+                // Oyuncuların odalarına girip skor yazabilmesi için arka plandaki canlı maç dökümanlarını da senkronize et
+                if (m1.firestoreMatchId) {
+                    await db.collection('matches').doc(m1.firestoreMatchId).update({
+                        oyuncu1ID: m1.p1.p1,
+                        oyuncu1PartnerID: m1.p1.p2 || null,
+                        oyuncu2ID: m1.p2.p1,
+                        oyuncu2PartnerID: m1.p2.p2 || null
+                    });
+                }
+                if (m3.firestoreMatchId) {
+                    await db.collection('matches').doc(m3.firestoreMatchId).update({
+                        oyuncu1ID: m3.p1.p1,
+                        oyuncu1PartnerID: m3.p1.p2 || null,
+                        oyuncu2ID: m3.p2.p1,
+                        oyuncu2PartnerID: m3.p2.p2 || null
+                    });
+                }
+                
+                // Değiştirilmiş nihai ağacı turnuva dökümanına kalıcı olarak mühürle
+                await tourRef.update({ bracket: bracket });
+                console.log("✅ Canlı onarım kilidi: Turnuva ağacı ve alt dökümanlar başarıyla adil eşleşmeye zorlandı!");
+            }
+        }
+
+        // Geriye dönük eksik ROZETLERİ dağıt (Aynen korundu)
+        const badgeFunc = window.checkAndGrantBadges || checkAndGrantBadges;
+        if (typeof badgeFunc === 'function') {
+            for (let uid of uniqueUsersToBadge) {
+                await badgeFunc(uid);
+            }
+        }
+
+        alert(`Onarım ve Adil Eşleşme Çaprazlaması Başarıyla Tamamlandı! 🚀\n\n${repairCount} maç tarandı, grup içi çakışmalar kalıcı olarak engellendi.`);
+        openTournamentDetail(tourId, (await tourRef.get()).data());
+    } catch (e) {
+        console.error(e);
+        alert("Onarım sırasında hata: " + e.message);
+    }
+};
 window.openTournamentDetail = function(tourId, tourData) {
     const container = document.getElementById('tournament-list-view');
     const detail = document.getElementById('tournament-detail-view');
