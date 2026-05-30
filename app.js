@@ -1383,24 +1383,23 @@ function showMatchDetail(matchDocId) {
     actionButtonsContainer.innerHTML = ''; document.getElementById('result-message').textContent = '';
 
     const currentUserID = auth.currentUser.uid;
+    // 💡 GÜNCELLEME: Giriş yapan kişinin global admin (Hakem) rolü hafızaya alınıyor
+    const isGlobalAdmin = userMap[currentUserID]?.rol === 'admin';
 
     db.collection('matches').doc(matchDocId).get().then(async doc => {
-        // GÜVENLİK KONTROLÜ: Döküman veri tabanında mevcut değilse çökmesini engelle
         if (!doc.exists) {
             detailMatchInfo.innerHTML = '<p style="color:red;">Maç verisi bulunamadı veya silinmiş.</p>';
             return;
         }
 
         const match = doc.data();
-        
-        // 1. KİMLİK KONTROLLERİ
         const isParticipant = (currentUserID === match.oyuncu1ID || currentUserID === match.oyuncu2ID || currentUserID === match.oyuncu1PartnerID || currentUserID === match.oyuncu2PartnerID);
         
         let isTourAdmin = false;
         if (match.tournamentId) {
             try {
                 const tourSnap = await db.collection('tournaments').doc(match.tournamentId).get();
-                if (tourSnap.exists && tourSnap.data().creatorId === currentUserID) {
+                if (tourSnap.exists && (tourSnap.data().creatorId === currentUserID || isGlobalAdmin)) {
                     isTourAdmin = true;
                 }
             } catch(e) { console.error("Turnuva admini kontrol edilirken hata:", e); }
@@ -1409,18 +1408,14 @@ function showMatchDetail(matchDocId) {
         const p1Name = userMap[match.oyuncu1ID]?.isim || '???'; 
         const p2Name = match.oyuncu2ID ? (userMap[match.oyuncu2ID]?.isim || '???') : 'Henüz Yok';
         
-        // --- ÇİFTLER İÇİN TAKIM İSİMLERİ OLUŞTURMA (TAM GÜVENLİ VE KORUMALI) ---
         let team1Name = p1Name.split(' ')[0]; 
         if (!(match.macFormati || '').includes('Tekler') && match.oyuncu1PartnerID && userMap[match.oyuncu1PartnerID]) {
-            const partner1Name = userMap[match.oyuncu1PartnerID].isim || '???';
-            team1Name += ` & ${partner1Name.split(' ')[0]}`;
+            team1Name += ` & ${userMap[match.oyuncu1PartnerID].isim.split(' ')[0]}`;
         }
         let team2Name = p2Name.split(' ')[0];
         if (!(match.macFormati || '').includes('Tekler') && match.oyuncu2PartnerID && userMap[match.oyuncu2PartnerID]) {
-            const partner2Name = userMap[match.oyuncu2PartnerID].isim || '???';
-            team2Name += ` & ${partner2Name.split(' ')[0]}`;
+            team2Name += ` & ${userMap[match.oyuncu2PartnerID].isim.split(' ')[0]}`;
         }
-        // --------------------------------------------------------------------
         
         winnerSelect.innerHTML = `<option value="">Kazanan Takımı Seçin</option><option value="${match.oyuncu1ID}">${team1Name}</option>`;
         if(match.oyuncu2ID) winnerSelect.innerHTML += `<option value="${match.oyuncu2ID}">${team2Name}</option>`;
@@ -1430,7 +1425,6 @@ function showMatchDetail(matchDocId) {
         
         const courtType = match.kortTipi ? ` (${match.kortTipi})` : '';
         
-        // --- GÜVENLİ ZAMAN AYRIŞTIRICI ---
         if(match.macYeri && match.macZamani) { 
             let jsDate = typeof match.macZamani.toDate === 'function' ? match.macZamani.toDate() : (match.macZamani.seconds !== undefined ? new Date(match.macZamani.seconds * 1000) : null);
             const d = jsDate ? jsDate.toLocaleString('tr-TR') : 'Tarih Belirsiz';
@@ -1443,13 +1437,17 @@ function showMatchDetail(matchDocId) {
         if(match.macFotoURL && detailMatchPhoto) { detailMatchPhoto.src = match.macFotoURL; detailMatchPhoto.style.display = 'block'; }
         detailMatchInfo.innerHTML = infoHTML;
 
-        const photoArea = document.getElementById('photo-upload-area'); const currentPhotoDisplay = document.getElementById('current-match-photo-display'); const previewImg = document.getElementById('standalone-photo-preview'); const photoInput = document.getElementById('standalone-photo-input');
+        const photoArea = document.getElementById('photo-upload-area'); 
+        const currentPhotoDisplay = document.getElementById('current-match-photo-display'); 
+        const previewImg = document.getElementById('standalone-photo-preview'); 
+        const photoInput = document.getElementById('standalone-photo-input');
         if(previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }
         if(photoInput) photoInput.value = '';
 
         const isEligibleStatus = ['Hazır', 'Sonuç_Bekleniyor', 'Tamamlandı'].includes(match.durum);
 
-        if ((isParticipant || isTourAdmin) && isEligibleStatus && photoArea) {
+        // 💡 GÜNCELLEME: Fotoğraf yükleme alanına isGlobalAdmin yetkisi mühürlendi
+        if ((isParticipant || isTourAdmin || isGlobalAdmin) && isEligibleStatus && photoArea) {
             photoArea.style.display = 'block';
             if (match.macFotoURL && currentPhotoDisplay) { currentPhotoDisplay.src = match.macFotoURL; currentPhotoDisplay.style.display = 'block'; } else if(currentPhotoDisplay) { currentPhotoDisplay.style.display = 'none'; }
             const saveBtn = document.getElementById('btn-save-photo-only'); if(saveBtn) saveBtn.onclick = () => saveOnlyPhoto(matchDocId);
@@ -1467,8 +1465,8 @@ function showMatchDetail(matchDocId) {
             } else { chatFromMatchBtn.style.display = 'none'; }
         }
         
-        // 2. YETKİ KONTROLÜ İLE BUTONLARI GÖSTER
-        if (!isParticipant && !isTourAdmin) {
+        // 💡 GÜNCELLEME: Yetki kilidinden isGlobalAdmin muaf tutuldu (Böylece admin lobi maç formlarına ulaşabilir)
+        if (!isParticipant && !isTourAdmin && !isGlobalAdmin) {
             if (match.durum === 'Sonuç_Bekleniyor' || match.durum === 'Tamamlandı') {
                 const s = match.skor || {}; scoreDisplaySection.style.display = 'block';
                 let resText = match.durum === 'Tamamlandı' ? `<p style="color:green;">Kazanan: ${userMap[match.kayitliKazananID]?.isim}</p>` : `<p style="color:orange;">Sonuç Onayı Bekleniyor</p>`;
@@ -1533,7 +1531,6 @@ function showMatchDetail(matchDocId) {
             COURT_LIST.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if(match.macYeri === c) o.selected = true; dVenueSelect.appendChild(o); });
             if(match.kortTipi) document.getElementById('dynamic-court-type').value = match.kortTipi;
             
-            // --- GÜVENLİ ZAMAN INPUT GÜNCELLEMESİ ---
             if(match.macZamani) { 
                 let jsDate = typeof match.macZamani.toDate === 'function' ? match.macZamani.toDate() : (match.macZamani.seconds !== undefined ? new Date(match.macZamani.seconds * 1000) : null);
                 if (jsDate && !isNaN(jsDate.getTime())) {
@@ -1567,9 +1564,9 @@ function showMatchDetail(matchDocId) {
             document.getElementById('dynamic-save-score-btn').onclick = () => saveMatchResult(matchDocId);
         }
         else if (match.durum === 'Sonuç_Bekleniyor') {
-            // ... (Mevcut 'Sonuç_Bekleniyor' kodun aynen devam ediyor)
             const s = match.skor || {};
-            if (isTourAdmin || match.sonucuGirenID !== currentUserID) {
+            // 💡 GÜNCELLEME: Onaylama ekranının hakeme açılması için isGlobalAdmin kontrolü mühürlendi
+            if (isTourAdmin || isGlobalAdmin || match.sonucuGirenID !== currentUserID) {
                 const myS1 = s.s1_opp || 0; const oppS1 = s.s1_me || 0; const myS2 = s.s2_opp || 0; const oppS2 = s.s2_me || 0; const myS3 = s.s3_opp || 0; const oppS3 = s.s3_me || 0;
                 const p1Val = match.oyuncu1ID; const p2Val = match.oyuncu2ID;
 
@@ -1613,7 +1610,6 @@ function showMatchDetail(matchDocId) {
             scoreDisplaySection.innerHTML = `<div style="background:#e8f5e9; padding:10px; border-radius:8px; border:1px solid #c3e6cb;"><p style="font-size:1.2em; font-weight:bold; text-align:center; margin-bottom:5px;">${s.s1_me}-${s.s1_opp}, ${s.s2_me}-${s.s2_opp} ${s.s3_me || s.s3_opp ? ', ' + s.s3_me + '-' + s.s3_opp : ''}</p><p style="text-align:center; color:#28a745; margin:0;">Kazanan: <strong>${(match.kayitliKazananID === match.oyuncu1ID) ? team1Name : team2Name}</strong></p></div>`;
         }
 
-        // Share/Instagram butonu ayarları alt satırda aynen devam ediyor...
         const shareMatchBtn = document.getElementById('btn-share-match-detail');
         if (shareMatchBtn) {
             const newShareBtn = shareMatchBtn.cloneNode(true); shareMatchBtn.parentNode.replaceChild(newShareBtn, shareMatchBtn);
@@ -1624,7 +1620,7 @@ function showMatchDetail(matchDocId) {
                 let finalMatchData = null; try { if (typeof match !== 'undefined') finalMatchData = match; } catch (e) {}
                 if (!finalMatchData && typeof currentMatchDocId !== 'undefined' && currentMatchDocId) { try { const doc = await db.collection('matches').doc(currentMatchDocId).get(); finalMatchData = doc.data(); } catch (err) { console.error(err); } }
                 if (!finalMatchData) { alert("Veri yüklenemedi, lütfen sayfayı yenileyin."); return; }
-                const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQu6E1MzcuNTg2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
+                const SAFE_LOGO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+PHBhdGggZmlsbD0iI2MzZjkwOCIgZD0iTTI1NiAwdTI1NiAyNTZjMCAxNDEuMzg1LTExNC42MTUgMjU2LTI1NiAyNTZTJDAgMzk3LjM4NSAwIDI1NiAxMTQu6E1MztenM3LTU2IDEzNC4xMDRjNDkuNjY4IDM5LjczNyAxMTIuNzU3IDYzLjYyNCAxODAuOTU4IDYzLjYyNHMxMzEuMjktMjMuODg3IDE4MC45NTgtNjMuNjI0Ii8+PC9zdmc+";
                 const getU = (id) => userMap[id] || { isim: 'Bilinmeyen', fotoURL: 'https://via.placeholder.com/150' };
                 const p1 = getU(finalMatchData.oyuncu1ID); const p1p = finalMatchData.oyuncu1PartnerID ? getU(finalMatchData.oyuncu1PartnerID) : null;
                 const p2 = getU(finalMatchData.oyuncu2ID); const p2p = finalMatchData.oyuncu2PartnerID ? getU(finalMatchData.oyuncu2PartnerID) : null;
@@ -2881,8 +2877,10 @@ window.openTournamentDetail = function(tourId, tourData) {
     document.getElementById('detail-tour-name').textContent = tourData.name;
 
     const myUid = auth.currentUser.uid;
-    // GÜVENLİK GÜNCELLEMESİ: Eski turnuvaları veya admini doğru tanıma
-    const isAdmin = !tourData.creatorId || (tourData.creatorId === myUid);
+    const currentUserData = userMap[myUid];
+    
+    // 💡 GÜNCELLEME: Turnuva açma yetkisi halka açık kalırken, global admin her turnuvada tam yetkili kılınır
+    const isAdmin = !tourData.creatorId || (tourData.creatorId === myUid) || (currentUserData && currentUserData.rol === 'admin');
     
     renderRegistrationArea(tourId, tourData, myUid);
 
@@ -2916,11 +2914,9 @@ window.openTournamentDetail = function(tourId, tourData) {
             let generationButtons = '';
             const isChangingLeague = (tourData.systemType === 'league' && tourData.leagueTeamType === 'changing');
 
-            // 1. ADIM: EĞER OTOMATİK SABİT TAKIMSA ÖNCE TAKIMLARI KUR BUTONU ÇIKAR
             if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated && !isChangingLeague) {
                  generationButtons = `<button onclick="window.generateAutoTeams('${tourId}')" class="btn-main" style="background:#17a2b8; padding:10px; width:100%;">🤖 Sistem Takımlarını Kur (${tourData.autoType === 'balanced' ? 'Denk' : 'Kura'})</button>`;
             } 
-            // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE / DEĞİŞEN LİG İSE) SİSTEMİ BAŞLAT BUTONLARI ÇIKAR
             else {
                  if (tourData.systemType === 'league') {
                      generationButtons = `<button onclick="window.generateLeagueFixture('${tourId}')" class="btn-main" style="background:#20c997; padding:10px; width:100%;">📅 Lig Fikstürünü Çıkar ve Başlat</button>`;
@@ -2941,7 +2937,6 @@ window.openTournamentDetail = function(tourId, tourData) {
             else actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
         }
 
-        // EKRANA ÇİZ (5. Adımdaki akıllı Ödül Havuzu dağıtım butonu entegre edildi)
         adminArea.innerHTML = `
             <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
             <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
@@ -2996,7 +2991,6 @@ window.openTournamentDetail = function(tourId, tourData) {
         document.getElementById('tour-bracket-container').innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Fikstür henüz oluşturulmadı.</p>';
     }
 };
-
 
     window.deleteTournament = async function(tourId) {
         if(!confirm("⚠️ DİKKAT: Bu turnuvayı silmek istediğinize emin misiniz?\n\nBu işlem oyuncuların bu turnuvadan kazandığı PUANLARI da geri alacaktır!")) return;
