@@ -1765,11 +1765,23 @@ function showMatchDetail(matchDocId) {
             const totalAdvancing = numGroups * advancingCount;
             const bracketSize = Math.pow(2, Math.ceil(Math.log2(totalAdvancing)));
             
-            let placeholders = [];
-            // 1. Önce direkt çıkanları (Tüm 1.ler, sonra tüm 2.ler) sıraya diz ki adil eşleşsin
-            for(let r=1; r<=advancingCount; r++) {
-                for(let g=0; g<numGroups; g++) { 
-                    placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r }); 
+           let placeholders = [];
+            // 💡 3 Gruplu sistemde aynı gruptan çıkanların (Örn: C1 vs C2) eşleşmesini önleyen akıllı çaprazlama
+            if (numGroups === 3 && advancingCount === 2) {
+                placeholders = [
+                    { isPlaceholder: true, groupIdx: 0, groupName: 'A', rank: 1 }, // A1
+                    { isPlaceholder: true, groupIdx: 1, groupName: 'B', rank: 1 }, // B1
+                    { isPlaceholder: true, groupIdx: 2, groupName: 'C', rank: 1 }, // C1
+                    { isPlaceholder: true, groupIdx: 1, groupName: 'B', rank: 2 }, // B2 (Çaprazlama için öne alındı)
+                    { isPlaceholder: true, groupIdx: 2, groupName: 'C', rank: 2 }, // C2
+                    { isPlaceholder: true, groupIdx: 0, groupName: 'A', rank: 2 }  // A2
+                ];
+            } else {
+                // Diğer grup sayıları için genel adil dizilim algoritması (Aynen korundu)
+                for(let r=1; r<=advancingCount; r++) {
+                    for(let g=0; g<numGroups; g++) { 
+                        placeholders.push({ isPlaceholder: true, groupIdx: g, groupName: String.fromCharCode(65 + g), rank: r }); 
+                    }
                 }
             }
             
@@ -3517,6 +3529,20 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
             }
 
             if (allGroupsFinished) {
+                // 💡 [YENİ CANLI TURNUVA KORUMASI]: 3 Gruplu sistemde aynı gruptan çıkanların (C1 vs C2) 
+                // Çeyrek finalde çakışmasını engellemek için senkronizasyon anında akıllı takas (Swap) uyguluyoruz.
+                if (data.groups && data.groups.length === 3 && data.advancingCount === 2 && bracket && bracket[0] && bracket[0].matches.length === 4) {
+                    const m1 = bracket[0].matches[1];
+                    const m3 = bracket[0].matches[3];
+                    
+                    // Eğer 2. maçın tepesinde A2 ve 4. maçın altında C2 oturuyorsa yerlerini çaprazla
+                    if (m1 && m3 && m1.p1 && m3.p2 && m1.p1.groupName === 'A' && m3.p2.groupName === 'C') {
+                        const temp = m1.p1;
+                        bracket[0].matches[1].p1 = m3.p2; // A2 yerine C2 gelsin (Böylece C2 vs B2 olur)
+                        bracket[0].matches[3].p2 = temp;  // C2 yerine A2 gelsin (Böylece C1 vs A2 olur)
+                        console.log("🌐 Canlı Turnuva Koruması: Grup içi çakışma senkronizasyon motoru tarafından başarıyla çözüldü!");
+                    }
+                }
                 for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
                     let m = bracket[0].matches[mIdx];
                     if (m.p1 && m.p1.isLiveCandidate !== undefined) m.p1.isLiveCandidate = false;
