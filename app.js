@@ -2821,123 +2821,129 @@ async function shareElementAsImage(elementId, fileNamePrefix, buttonId) {
             alert("Onarım sırasında hata: " + e.message);
         }
     };
-// --- 1. TURNUVA DETAY VE ORGANİZATÖR PANELİ (TEK VE TEMİZ VERSİYON) ---
-    window.openTournamentDetail = function(tourId, tourData) {
-        const container = document.getElementById('tournament-list-view');
-        const detail = document.getElementById('tournament-detail-view');
-        if(container) container.style.display = 'none';
-        if(detail) detail.style.display = 'block';
-        document.getElementById('detail-tour-name').textContent = tourData.name;
+window.openTournamentDetail = function(tourId, tourData) {
+    const container = document.getElementById('tournament-list-view');
+    const detail = document.getElementById('tournament-detail-view');
+    if(container) container.style.display = 'none';
+    if(detail) detail.style.display = 'block';
+    document.getElementById('detail-tour-name').textContent = tourData.name;
 
-        const myUid = auth.currentUser.uid;
-        // GÜVENLİK GÜNCELLEMESİ: Eski turnuvaları veya admini doğru tanıma
-        const isAdmin = !tourData.creatorId || (tourData.creatorId === myUid);
+    const myUid = auth.currentUser.uid;
+    // GÜVENLİK GÜNCELLEMESİ: Eski turnuvaları veya admini doğru tanıma
+    const isAdmin = !tourData.creatorId || (tourData.creatorId === myUid);
+    
+    renderRegistrationArea(tourId, tourData, myUid);
+
+    const adminArea = document.getElementById('tour-admin-manage-area');
+    if (isAdmin) {
+        adminArea.style.display = 'block';
+        let actionButtonsHTML = '';
+
+        let matchStarted = false;
         
-        renderRegistrationArea(tourId, tourData, myUid);
-
-        const adminArea = document.getElementById('tour-admin-manage-area');
-        if (isAdmin) {
-            adminArea.style.display = 'block';
-            let actionButtonsHTML = '';
-
-            let matchStarted = false;
-            
-            // Eleme Ağacı (Bracket) Maçları Başladı mı?
-            if(tourData.bracket) {
-                tourData.bracket.forEach(r => r.matches.forEach(m => { 
-                    if(m.winner && m.score !== "Bay Geçti" && m.score !== "Oynamadan Geçti") {
-                        matchStarted = true; 
-                    }
-                }));
-            }
-            
-            // Grup Maçları Başladı mı Kontrolü
-            if(tourData.groups) {
-                tourData.groups.forEach(g => g.matches.forEach(m => {
-                    if(m.winner) matchStarted = true;
-                }));
-            }
-
-            // Duruma Göre Normal Butonları Ayarla
-if (tourData.status === 'Kayıt') {
-                actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
-            } else if (tourData.status === 'Format_Secimi') {
-  let generationButtons = '';
-                const isChangingLeague = (tourData.systemType === 'league' && tourData.leagueTeamType === 'changing');
-
-                // 1. ADIM: EĞER OTOMATİK SABİT TAKIMSA ÖNCE TAKIMLARI KUR BUTONU ÇIKAR
-                if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated && !isChangingLeague) {
-                     generationButtons = `<button onclick="window.generateAutoTeams('${tourId}')" class="btn-main" style="background:#17a2b8; padding:10px; width:100%;">🤖 Sistem Takımlarını Kur (${tourData.autoType === 'balanced' ? 'Denk' : 'Kura'})</button>`;
-                } 
-                // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE / DEĞİŞEN LİG İSE) SİSTEMİ BAŞLAT BUTONLARI ÇIKAR
-                else {
-                     if (tourData.systemType === 'league') {
-                         generationButtons = `<button onclick="window.generateLeagueFixture('${tourId}')" class="btn-main" style="background:#20c997; padding:10px; width:100%;">📅 Lig Fikstürünü Çıkar ve Başlat</button>`;
-                     } else if (tourData.systemType === 'knockout') {
-                         generationButtons = `<button onclick="generateKnockoutDraw('${tourId}', true)" class="btn-main" style="background:#6f42c1; padding:10px; width:100%;">🎾 Eleme Ağacını Kur ve Başlat</button>`;
-                     } else {
-                         generationButtons = `<button onclick="document.getElementById('group-settings-area').style.display='block'" class="btn-main" style="background:#007bff; padding:10px; width:100%;">👥 Grupları Kur ve Başlat</button>`;
-                     }
+        // Eleme Ağacı (Bracket) Maçları Başladı mı?
+        if(tourData.bracket) {
+            tourData.bracket.forEach(r => r.matches.forEach(m => { 
+                if(m.winner && m.score !== "Bay Geçti" && m.score !== "Oynamadan Geçti") {
+                    matchStarted = true; 
                 }
-                
-                actionButtonsHTML = `
-                    <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-                        ${generationButtons}
-                        <button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Tekrar Aç 🔓</button>
-                    </div>`;
-            } else {
-                if(!matchStarted) actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Aç 🔓</button>`;
-                else actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
+            }));
+        }
+        
+        // Grup Maçları Başladı mı Kontrolü
+        if(tourData.groups) {
+            tourData.groups.forEach(g => g.matches.forEach(m => {
+                if(m.winner) matchStarted = true;
+            }));
+        }
+
+        // Duruma Göre Normal Butonları Ayarla
+        if (tourData.status === 'Kayıt') {
+            actionButtonsHTML = `<button id="btn-close-registration" class="btn-main" style="background:#dc3545; font-size:0.8em; padding:8px; flex:1;">Kayıtları Kapat 🔒</button>`;
+        } else if (tourData.status === 'Format_Secimi') {
+            let generationButtons = '';
+            const isChangingLeague = (tourData.systemType === 'league' && tourData.leagueTeamType === 'changing');
+
+            // 1. ADIM: EĞER OTOMATİK SABİT TAKIMSA ÖNCE TAKIMLARI KUR BUTONU ÇIKAR
+            if (!tourData.format.includes('Tekler') && tourData.regType === 'auto' && !tourData.teamsGenerated && !isChangingLeague) {
+                 generationButtons = `<button onclick="window.generateAutoTeams('${tourId}')" class="btn-main" style="background:#17a2b8; padding:10px; width:100%;">🤖 Sistem Takımlarını Kur (${tourData.autoType === 'balanced' ? 'Denk' : 'Kura'})</button>`;
+            } 
+            // 2. ADIM: TAKIMLAR KURULDUYSA (VEYA MANUELSE / DEĞİŞEN LİG İSE) SİSTEMİ BAŞLAT BUTONLARI ÇIKAR
+            else {
+                 if (tourData.systemType === 'league') {
+                     generationButtons = `<button onclick="window.generateLeagueFixture('${tourId}')" class="btn-main" style="background:#20c997; padding:10px; width:100%;">📅 Lig Fikstürünü Çıkar ve Başlat</button>`;
+                 } else if (tourData.systemType === 'knockout') {
+                     generationButtons = `<button onclick="generateKnockoutDraw('${tourId}', true)" class="btn-main" style="background:#6f42c1; padding:10px; width:100%;">🎾 Eleme Ağacını Kur ve Başlat</button>`;
+                 } else {
+                     generationButtons = `<button onclick="document.getElementById('group-settings-area').style.display='block'" class="btn-main" style="background:#007bff; padding:10px; width:100%;">👥 Grupları Kur ve Başlat</button>`;
+                 }
             }
-// EKRANA ÇİZ (Gruplar Bitti Kutusu Tamamen Kaldırıldı)
-            adminArea.innerHTML = `
-                <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
-                <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-                    ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
-                    ${actionButtonsHTML}
-                </div>
-                <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
-                    <label class="input-label">Oyuncu 1</label>
-                    <select id="admin-p1-select"></select>
-                   ${!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
-                    <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
-                </div>
-                
-                <div id="group-settings-area" style="display:none; background:#e3f2fd; padding:15px; border-radius:8px; margin-top:10px; border:1px solid #bbdefb;">
-                    <label class="input-label" style="color:#0d47a1; font-weight:bold;">Grup Başına Ortalama Oyuncu (Örn: 4)</label>
-                    <input type="number" id="group-size-input" value="4" min="2" style="padding:8px; margin-bottom:10px;">
-                    <label class="input-label" style="color:#0d47a1; font-weight:bold;">Gruptan Kaç Kişi Üst Tura Çıkacak? (Örn: 2)</label>
-                    <input type="number" id="advancing-count-input" value="2" min="1" style="padding:8px; margin-bottom:10px;">
-                    <button onclick="generateGroupStageDraw('${tourId}')" class="btn-save" style="margin-top:5px; background:#007bff;">Grupları Oluştur ve Başlat 🚀</button>
-                </div>
-
-                <button onclick="syncTournamentMatches('${tourId}')" style="background:none; border:none; color:#17a2b8; text-decoration:underline; width:100%; margin-top:15px; font-weight:bold; box-shadow:none;">🔄 Hatalı Onaylanan Maçları Senkronize Et</button>
-                <button onclick="window.recalculateAllPoints()" style="background:none; border:none; color:#28a745; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🛠️ Tüm Ligin Puanlarını Sıfırdan Onar</button>
-                <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
-            `;
             
-            const btnAdd = document.getElementById('btn-admin-add-player');
-            if(btnAdd) btnAdd.onclick = () => {
-                const f = document.getElementById('admin-manual-add-form');
-                f.style.display = f.style.display === 'none' ? 'block' : 'none';
-                populateAdminPlayerSelects(tourData);
-            };
-
-            const btnSaveManual = document.getElementById('btn-admin-save-reg');
-            if(btnSaveManual) btnSaveManual.onclick = () => adminAddParticipant(tourId);
-
-            const btnCloseReg = document.getElementById('btn-close-registration');
-            if (btnCloseReg) btnCloseReg.onclick = () => closeRegistration(tourId, tourData);
+            actionButtonsHTML = `
+                <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+                    ${generationButtons}
+                    <button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Tekrar Aç 🔓</button>
+                </div>`;
         } else {
-            adminArea.style.display = 'none';
+            if(!matchStarted) actionButtonsHTML = `<button onclick="updateTournamentStatus('${tourId}', 'Kayıt')" class="btn-main" style="background:#ffc107; color:#333; padding:8px;">Kayıtları Aç 🔓</button>`;
+            else actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
         }
 
-        if (tourData.bracket || tourData.groups) {
-            renderTournamentBracket(tourId, tourData, myUid); 
-        } else {
-            document.getElementById('tour-bracket-container').innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Fikstür henüz oluşturulmadı.</p>';
-        }
-    };
+        // EKRANA ÇİZ (5. Adımdaki akıllı Ödül Havuzu dağıtım butonu entegre edildi)
+        adminArea.innerHTML = `
+            <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
+            <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
+                ${actionButtonsHTML}
+            </div>
+            
+            ${tourData.prizeDistributed ? 
+                `<p style="background:#e8f5e9; color:#28a745; padding:10px; border-radius:8px; font-weight:bold; text-align:center; margin:10px 0; font-size:0.85em;">💰 Ödül Havuzu Başarıyla Dağıtıldı</p>` : 
+                `<button onclick="window.manualDistributePrizePool('${tourId}')" class="btn-main" style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); color:white; padding:10px; font-size:0.85em; margin-bottom:10px; box-shadow: 0 4px 10px rgba(245,124,0,0.3); width:100%;">🏆 Turnuva Ödül Havuzunu Dağıt</button>`
+            }
+
+            <div id="admin-manual-add-form" style="display:none; background:#fff; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
+                <label class="input-label">Oyuncu 1</label>
+                <select id="admin-p1-select"></select>
+               ${!(tourData.format || '').includes('Tekler') && tourData.regType !== 'auto' ? `<label class="input-label">Oyuncu 2 (Partner)</label><select id="admin-p2-select"></select>` : ''}
+                <button id="btn-admin-save-reg" class="btn-save" style="margin-top:10px;">Kaydı Ekle ✅</button>
+            </div>
+            
+            <div id="group-settings-area" style="display:none; background:#e3f2fd; padding:15px; border-radius:8px; margin-top:10px; border:1px solid #bbdefb;">
+                <label class="input-label" style="color:#0d47a1; font-weight:bold;">Grup Başına Ortalama Oyuncu (Örn: 4)</label>
+                <input type="number" id="group-size-input" value="4" min="2" style="padding:8px; margin-bottom:10px;">
+                <label class="input-label" style="color:#0d47a1; font-weight:bold;">Gruptan Kaç Kişi Üst Tura Çıkacak? (Örn: 2)</label>
+                <input type="number" id="advancing-count-input" value="2" min="1" style="padding:8px; margin-bottom:10px;">
+                <button onclick="generateGroupStageDraw('${tourId}')" class="btn-save" style="margin-top:5px; background:#007bff;">Grupları Oluştur ve Başlat 🚀</button>
+            </div>
+
+            <button onclick="syncTournamentMatches('${tourId}')" style="background:none; border:none; color:#17a2b8; text-decoration:underline; width:100%; margin-top:15px; font-weight:bold; box-shadow:none;">🔄 Hatalı Onaylanan Maçları Senkronize Et</button>
+            <button onclick="window.recalculateAllPoints()" style="background:none; border:none; color:#28a745; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🛠️ Tüm Ligin Puanlarını Sıfırdan Onar</button>
+            <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
+        `;
+        
+        const btnAdd = document.getElementById('btn-admin-add-player');
+        if(btnAdd) btnAdd.onclick = () => {
+            const f = document.getElementById('admin-manual-add-form');
+            f.style.display = f.style.display === 'none' ? 'block' : 'none';
+            populateAdminPlayerSelects(tourData);
+        };
+
+        const btnSaveManual = document.getElementById('btn-admin-save-reg');
+        if(btnSaveManual) btnSaveManual.onclick = () => adminAddParticipant(tourId);
+
+        const btnCloseReg = document.getElementById('btn-close-registration');
+        if (btnCloseReg) btnCloseReg.onclick = () => closeRegistration(tourId, tourData);
+    } else {
+        adminArea.style.display = 'none';
+    }
+
+    if (tourData.bracket || tourData.groups) {
+        renderTournamentBracket(tourId, tourData, myUid); 
+    } else {
+        document.getElementById('tour-bracket-container').innerHTML = '<p style="text-align:center; color:#777; width: 100%; margin-top:20px;">Fikstür henüz oluşturulmadı.</p>';
+    }
+};
 
 
     window.deleteTournament = async function(tourId) {
@@ -3145,72 +3151,110 @@ if (tourData.status === 'Kayıt') {
     }
 
 async function joinTournament(tourId, tourData, myUid) {
-        const me = userMap[myUid];
-        if (me.toplamPuan < tourData.fee) return alert(`Bu turnuvaya katılmak için en az ${tourData.fee} puana ihtiyacın var.`);
+    const me = userMap[myUid];
+    const isDoublesTour = !(tourData.format || '').includes('Tekler');
+    const pointField = isDoublesTour ? 'ciftlerPuani' : 'toplamPuan';
+    const myPoints = isDoublesTour ? (me.ciftlerPuani !== undefined ? me.ciftlerPuani : 1000) : (me.toplamPuan || 0);
+
+    if (myPoints < tourData.fee) return alert(`Bu turnuvaya katılmak için en az ${tourData.fee} turnuva puanına ihtiyacın var.`);
+    
+    let newRegistration = { p1: myUid, p2: null };
+    const format = tourData.format;
+    const myGender = me.cinsiyet;
+    const regType = tourData.regType || 'manual';
+
+    if (!myGender) return alert("Cinsiyet bilginiz eksik. Lütfen profilinizden güncelleyin.");
+
+    if (format === 'Tekler Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece Erkek oyuncular katılabilir.");
+    if (format === 'Tekler Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece Kadın oyuncular katılabilir.");
+
+    const batch = db.batch();
+
+    if (!format.includes('Tekler') && regType === 'auto') {
+        if (format === 'Double Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece erkekler.");
+        if (format === 'Double Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece kadınlar.");
+    }
+    else if (!format.includes('Tekler') && regType === 'manual') {
+        const partnerId = document.getElementById('tour-partner-select').value;
+        if (!partnerId) return alert("Lütfen partner seçin!");
+        const p2 = userMap[partnerId];
+        if (!p2) return alert("Partner bulunamadı.");
         
-        let newRegistration = { p1: myUid, p2: null };
-        const format = tourData.format;
-        const myGender = me.cinsiyet;
+        const p2Points = isDoublesTour ? (p2.ciftlerPuani !== undefined ? p2.ciftlerPuani : 1000) : (p2.toplamPuan || 0);
+        if (p2Points < tourData.fee) return alert(`Partnerinizin puanı bu turnuva ücreti (${tourData.fee} P) için yetersiz!`);
 
-        if (!myGender) return alert("Cinsiyet bilginiz eksik. Lütfen profilinizden güncelleyin.");
-
-const regType = tourData.regType || 'manual';
-
-        // --- TEKLER İÇİN CİNSİYET KONTROLLERİ ---
-        if (format === 'Tekler Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece Erkek oyuncular katılabilir.");
-        if (format === 'Tekler Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece Kadın oyuncular katılabilir.");
-
-        // --- ÇİFTLER: OTOMATİK EŞLEŞME (SİSTEM KURACAK) ---
-        if (!format.includes('Tekler') && regType === 'auto') {
-            if (format === 'Double Erkek' && myGender !== 'Erkek') return alert("Hata: Sadece erkekler.");
-            if (format === 'Double Kadın' && myGender !== 'Kadın') return alert("Hata: Sadece kadınlar.");
-            // Mix formatında herkes bireysel kaydolur, sistem eşleştirecek
-            newRegistration.p2 = null; 
-        }
-        // --- ÇİFTLER: MANUEL TAKIM KAYDI ---
-        else if (!format.includes('Tekler') && regType === 'manual') {
-            const partnerId = document.getElementById('tour-partner-select').value;
-            if (!partnerId) return alert("Lütfen partner seçin!");
-            const p2Gender = userMap[partnerId]?.cinsiyet;
-            if (!p2Gender) return alert("Partnerinizin cinsiyet bilgisi eksik.");
-
-            if (format === 'Double Erkek' && (myGender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
-            if (format === 'Double Kadın' && (myGender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
-            if (format === 'Mix' && (myGender === p2Gender)) return alert("Hata: Mix turnuvasına bir Kadın ve bir Erkek katılmalıdır.");
-            newRegistration.p2 = partnerId;
-        }
-
-        try {
-            document.getElementById('btn-join-tour').disabled = true;
-            document.getElementById('btn-join-tour').textContent = 'Kayıt Yapılıyor...';
-            await db.collection('tournaments').doc(tourId).update({ participants: firebase.firestore.FieldValue.arrayUnion(newRegistration) });
-            alert("Kayıt başarılı! 🏆");
-            const updatedDoc = await db.collection('tournaments').doc(tourId).get();
-            openTournamentDetail(tourId, updatedDoc.data());
-        } catch(e) { alert("Hata: " + e.message); }
+        if (format === 'Double Erkek' && (myGender !== 'Erkek' || p2.cinsiyet !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
+        if (format === 'Double Kadın' && (myGender !== 'Kadın' || p2.cinsiyet !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
+        if (format === 'Mix' && (myGender === p2.cinsiyet)) return alert("Hata: Mix turnuvasına bir Kadın ve bir Erkek katılmalıdır.");
+        
+        newRegistration.p2 = partnerId;
+        // Partnerin ücretini de tahsil et
+        batch.update(db.collection('users').doc(partnerId), { [pointField]: firebase.firestore.FieldValue.increment(-tourData.fee) });
     }
 
-    window.cancelTournamentRegistration = async function(tourId, p1, p2) {
-        if (!confirm("Turnuva kaydını iptal etmek istediğine emin misin?")) return;
-        try {
-            const docRef = db.collection('tournaments').doc(tourId); const doc = await docRef.get();
-            let parts = doc.data().participants || [];
-            parts = parts.filter(p => !(p.p1 === p1 && p.p2 === (p2 !== 'null' ? p2 : null)));
-            await docRef.update({ participants: parts });
-            alert("Kaydın başarıyla iptal edildi.");
-            openTournamentDetail(tourId, (await docRef.get()).data());
-        } catch(e) { alert("İptal sırasında hata oluştu: " + e.message); }
-    };
+    // Kaptanın ücretini tahsil et
+    batch.update(db.collection('users').doc(myUid), { [pointField]: firebase.firestore.FieldValue.increment(-tourData.fee) });
+    
+    // Turnuvaya katılımcıyı ekle
+    const tourRef = db.collection('tournaments').doc(tourId);
+    batch.update(tourRef, { participants: firebase.firestore.FieldValue.arrayUnion(newRegistration) });
 
-    window.adminDeleteParticipant = async function(tourId, index) {
-        if (!confirm("Bu kaydı turnuvadan çıkarmak istediğinize emin misiniz?")) return;
-        try {
-            const docRef = db.collection('tournaments').doc(tourId); const doc = await docRef.get();
-            let parts = doc.data().participants || []; parts.splice(index, 1);
-            await docRef.update({ participants: parts }); alert("Kayıt silindi. 🗑️");
-            openTournamentDetail(tourId, (await docRef.get()).data());
-        } catch (e) { alert("Silme hatası: " + e.message); }
-    };
+    try {
+        document.getElementById('btn-join-tour').disabled = true;
+        await batch.commit();
+        alert(`Turnuvaya başarıyla kaydoldunuz! Giriş ücreti (${tourData.fee} P) hesabınızdan tahsil edildi. 🏆`);
+        const updatedDoc = await db.collection('tournaments').doc(tourId).get();
+        openTournamentDetail(tourId, updatedDoc.data());
+    } catch(e) { 
+        alert("Kayıt sırasında hata oluştu: " + e.message); 
+        if(document.getElementById('btn-join-tour')) document.getElementById('btn-join-tour').disabled = false;
+    }
+}
+
+window.cancelTournamentRegistration = async function(tourId, p1, p2) {
+    if (!confirm("Turnuva kaydını iptal etmek istediğine emin misin? Ücretiniz iade edilecektir.")) return;
+    try {
+        const docRef = db.collection('tournaments').doc(tourId); const doc = await docRef.get();
+        const tourData = doc.data();
+        let parts = tourData.participants || [];
+        parts = parts.filter(p => !(p.p1 === p1 && p.p2 === (p2 !== 'null' ? p2 : null)));
+        
+        const isDoublesTour = !(tourData.format || '').includes('Tekler');
+        const pointField = isDoublesTour ? 'ciftlerPuani' : 'toplamPuan';
+        
+        const batch = db.batch();
+        batch.update(docRef, { participants: parts });
+        if(p1) batch.update(db.collection('users').doc(p1), { [pointField]: firebase.firestore.FieldValue.increment(tourData.fee) });
+        if(p2 && p2 !== 'null') batch.update(db.collection('users').doc(p2), { [pointField]: firebase.firestore.FieldValue.increment(tourData.fee) });
+        
+        await batch.commit();
+        alert("Kaydınız iptal edildi ve giriş ücretiniz iade edildi. ↩️");
+        openTournamentDetail(tourId, (await docRef.get()).data());
+    } catch(e) { alert("İptal sırasında hata oluştu: " + e.message); }
+};
+
+window.adminDeleteParticipant = async function(tourId, index) {
+    if (!confirm("Bu kaydı turnuvadan çıkarmak istediğinize emin misiniz? Ücreti iade edilecektir.")) return;
+    try {
+        const docRef = db.collection('tournaments').doc(tourId); const doc = await docRef.get();
+        const tourData = doc.data();
+        let parts = tourData.participants || []; 
+        const removedTarget = parts[index];
+        parts.splice(index, 1);
+        
+        const isDoublesTour = !(tourData.format || '').includes('Tekler');
+        const pointField = isDoublesTour ? 'ciftlerPuani' : 'toplamPuan';
+
+        const batch = db.batch();
+        batch.update(docRef, { participants: parts });
+        if(removedTarget.p1) batch.update(db.collection('users').doc(removedTarget.p1), { [pointField]: firebase.firestore.FieldValue.increment(tourData.fee) });
+        if(removedTarget.p2) batch.update(db.collection('users').doc(removedTarget.p2), { [pointField]: firebase.firestore.FieldValue.increment(tourData.fee) });
+
+        await batch.commit(); 
+        alert("Kayıt silindi ve puanı iade edildi. 🗑️");
+        openTournamentDetail(tourId, (await docRef.get()).data());
+    } catch (e) { alert("Silme hatası: " + e.message); }
+};
 
     function populateAdminPlayerSelects(tourData) {
         const p1Select = document.getElementById('admin-p1-select'); const p2Select = document.getElementById('admin-p2-select');
@@ -3224,47 +3268,80 @@ const regType = tourData.regType || 'manual';
     }
 
 window.adminAddParticipant = async function(tourId) {
-        const p1 = document.getElementById('admin-p1-select').value;
-        const p2 = document.getElementById('admin-p2-select')?.value || null;
-        if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
+    const p1 = document.getElementById('admin-p1-select').value;
+    const p2 = document.getElementById('admin-p2-select')?.value || null;
+    if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
 
-        try {
-            const docRef = db.collection('tournaments').doc(tourId);
-            const tourSnap = await docRef.get();
-            const tourData = tourSnap.data();
-            const format = tourData.format;
-            const regType = tourData.regType || 'manual';
+    try {
+        const docRef = db.collection('tournaments').doc(tourId);
+        const tourSnap = await docRef.get();
+        const tourData = tourSnap.data();
+        const format = tourData.format;
+        const regType = tourData.regType || 'manual';
+        
+        // 💡 Turnuvanın tekler mi çiftler mi olduğunu süz ve düşülecek puan alanını belirle
+        const isDoublesTour = !format.includes('Tekler');
+        const pointField = isDoublesTour ? 'ciftlerPuani' : 'toplamPuan';
 
-            const p1Gender = userMap[p1]?.cinsiyet;
-            if (!p1Gender) return alert("Seçilen oyuncunun cinsiyet bilgisi eksik.");
+        const p1Gender = userMap[p1]?.cinsiyet;
+        if (!p1Gender) return alert("Seçilen oyuncunun cinsiyet bilgisi eksik.");
 
-            // TEKLER KONTROLÜ
-            if (format === 'Tekler Erkek' && p1Gender !== 'Erkek') return alert("Hata: Bu oyuncu Erkek değil.");
-            if (format === 'Tekler Kadın' && p1Gender !== 'Kadın') return alert("Hata: Bu oyuncu Kadın değil.");
+        // --- TEKLER KONTROLÜ ---
+        if (format === 'Tekler Erkek' && p1Gender !== 'Erkek') return alert("Hata: Bu oyuncu Erkek değil.");
+        if (format === 'Tekler Kadın' && p1Gender !== 'Kadın') return alert("Hata: Bu oyuncu Kadın değil.");
 
-            // ÇİFTLER: OTOMATİK EŞLEŞME (SİSTEM KURACAK) - BİREYSEL KAYIT
-            if (!format.includes('Tekler') && regType === 'auto') {
-                if (format === 'Double Erkek' && p1Gender !== 'Erkek') return alert("Hata: Sadece erkek oyuncu seçebilirsiniz.");
-                if (format === 'Double Kadın' && p1Gender !== 'Kadın') return alert("Hata: Sadece kadın oyuncu seçebilirsiniz.");
-                // Mix için cinsiyet fark etmez, herkes bireysel girer
-            } 
-            // ÇİFTLER: MANUEL TAKIM KAYDI
-            else if (!format.includes('Tekler') && regType === 'manual') {
-                if (!p2) return alert("Bu formatta partner seçmek zorunludur.");
-                const p2Gender = userMap[p2]?.cinsiyet;
-                if (!p2Gender) return alert("Partnerin cinsiyet bilgisi eksik.");
+        // --- ÇİFTLER: OTOMATİK EŞLEŞME (SİSTEM KURACAK) - BİREYSEL KAYIT ---
+        if (!format.includes('Tekler') && regType === 'auto') {
+            if (format === 'Double Erkek' && p1Gender !== 'Erkek') return alert("Hata: Sadece erkek oyuncu seçebilirsiniz.");
+            if (format === 'Double Kadın' && p1Gender !== 'Kadın') return alert("Hata: Sadece kadın oyuncu seçebilirsiniz.");
+        } 
+        // --- ÇİFTLER: MANUEL TAKIM KAYDI ---
+        else if (!format.includes('Tekler') && regType === 'manual') {
+            if (!p2) return alert("Bu formatta partner seçmek zorunludur.");
+            const p2Gender = userMap[p2]?.cinsiyet;
+            if (!p2Gender) return alert("Partnerin cinsiyet bilgisi eksik.");
 
-                if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
-                if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
-                if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix için 1 Kadın 1 Erkek gerekli.");
-            }
+            if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
+            if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
+            if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix için 1 Kadın 1 Erkek gerekli.");
+        }
 
-            const newPlayerObj = { p1, p2: (regType === 'auto' ? null : p2), points: 0 }; 
-            await docRef.update({ participants: firebase.firestore.FieldValue.arrayUnion(newPlayerObj) });
-            alert("Oyuncu başarıyla eklendi. ✅");
-            openTournamentDetail(tourId, (await docRef.get()).data());
-        } catch(e) { alert("Hata: " + e.message); }
-    };
+        // 💡 GÜVENLİK KONTROLÜ: Eklenen oyuncuların hesap bakiyelerini kontrol et
+        const p1Points = isDoublesTour ? (userMap[p1].ciftlerPuani !== undefined ? userMap[p1].ciftlerPuani : 1000) : (userMap[p1].toplamPuan || 0);
+        if (p1Points < tourData.fee) return alert(`Hata: Oyuncu 1'in puanı (${p1Points} P) turnuva ücreti (${tourData.fee} P) için yetersiz!`);
+
+        if (isDoublesTour && regType === 'manual' && p2) {
+            const p2Points = userMap[p2].ciftlerPuani !== undefined ? userMap[p2].ciftlerPuani : 1000;
+            if (p2Points < tourData.fee) return alert(`Hata: Seçilen partnerin puanı (${p2Points} P) turnuva ücreti (${tourData.fee} P) için yetersiz!`);
+        }
+
+        // 💡 PUAN TAHSİLATINI VE KAYDI GÜVENLİ BATCH'E BAĞLIYORUZ
+        const batch = db.batch();
+
+        // 1. Oyuncunun (Kaptan) ücretini düş
+        batch.update(db.collection('users').doc(p1), { [pointField]: firebase.firestore.FieldValue.increment(-tourData.fee) });
+        
+        // Eğer manuel çiftler takımıysa 2. oyuncunun (Partner) de ücretini düş
+        if (isDoublesTour && regType === 'manual' && p2) {
+            batch.update(db.collection('users').doc(p2), { [pointField]: firebase.firestore.FieldValue.increment(-tourData.fee) });
+        }
+
+        // Katılımcı objesini turnuva dökümanına ekle
+        const newPlayerObj = { p1, p2: (regType === 'auto' ? null : p2), points: 0 }; 
+        batch.update(docRef, { participants: firebase.firestore.FieldValue.arrayUnion(newPlayerObj) });
+        
+        // Tüm işlemleri eş zamanlı (Atomik) olarak tamamla
+        await batch.commit();
+
+        alert("Oyuncu(lar) turnuvaya başarıyla dahil edildi ve giriş ücretleri hesaplarından otomatik düşüldü! ✅");
+        
+        // Arayüzü tazelemek için turnuva detayını yeniden yükle
+        openTournamentDetail(tourId, (await docRef.get()).data());
+    } catch(e) { 
+        console.error("Manuel kayıt ekleme hatası:", e);
+        alert("Hata: Oyuncu eklenirken bir problem oluştu. " + e.message); 
+    }
+};
 
     window.updateTournamentStatus = async function(tourId, newStatus) {
         if(!confirm(`Turnuva durumunu '${newStatus}' olarak değiştirmek istiyor musunuz?`)) return;
@@ -3958,16 +4035,16 @@ const getPlayerFullName = (p) => {
                 
                 html += `<div style="font-weight:bold; color:#777; font-size:0.75em; margin-bottom:8px; text-transform:uppercase;">Grup Maçları</div><div style="display:flex; flex-direction:column; gap:8px;">`;
 
-                group.matches.forEach(match => {
-                    const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; 
-                    const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
-                    html += `
-                        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'}; min-width:unset; width:100%;" onclick="returnToTab = onclick="returnToTab = 'tab-tournaments'; window.verifyAndShowMatch('${tourId}', '${match.matchId || match.matchTag}', '${match.firestoreMatchId}')">
-                            <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
-                            <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
-                        </div>
-                    `;
-                });
+              group.matches.forEach(match => {
+    const isP1Win = match.winner && match.winner.p1 === match.p1?.p1; 
+    const isP2Win = match.winner && match.winner.p1 === match.p2?.p1;
+    html += `
+        <div class="bracket-match" style="cursor:pointer; border:1px solid ${match.winner ? '#28a745' : '#c06035'}; min-width:unset; width:100%;" onclick="returnToTab = 'tab-tournaments'; window.verifyAndShowMatch('${tourId}', '${match.matchId || match.matchTag}', '${match.firestoreMatchId}')">
+            <div class="match-player ${isP1Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p1)}</span><span style="font-size:0.8em;">${isP1Win ? 'Galip' : '-'}</span></div>
+            <div class="match-player ${isP2Win ? 'player-winner' : ''}"><span>${getPlayerFullName(match.p2)}</span><span style="font-size:0.8em;">${isP2Win ? 'Galip' : '-'}</span></div>
+        </div>
+    `;
+});
                 html += `</div>`;
                 groupDiv.innerHTML = html;
                 groupsWrapper.appendChild(groupDiv);
@@ -5539,5 +5616,144 @@ window.generateAutoTeams = async function(tourId) {
             console.error("💥 Günlük Çiftler sıralaması gönderilirken hata:", error);
         }
     };
+
+
+// --- 16. PROFESYONEL ÖDÜL HAVUZU DAĞITIM MOTORU (MANUEL VE OTOMATİK UYUMLU) ---
+window.distributeTournamentPrizePool = async function(tourId, tourData) {
+    if (!tourId || !tourData) return;
+    if (tourData.prizeDistributed === true) {
+        console.log("Bu turnuvanın ödül havuzu zaten dağıtılmış. ⏩");
+        return;
+    }
+
+    const fee = tourData.fee || 0;
+    const participants = tourData.participants || [];
+    if (fee === 0 || participants.length === 0) return;
+
+    const isDoubles = !(tourData.format || '').includes('Tekler');
+    const pointField = isDoubles ? 'ciftlerPuani' : 'toplamPuan';
+
+    // Toplam katılan tekil oyuncu sayısını hesapla
+    let totalPlayersCount = 0;
+    participants.forEach(p => {
+        if (p.p1) totalPlayersCount++;
+        if (p.p2) totalPlayersCount++;
+    });
+
+    const totalPrizePool = totalPlayersCount * fee;
+    if (totalPrizePool === 0) return;
+
+    const batch = db.batch();
+    let winnersSummaryText = `💰 *TOPLAM ÖDÜL HAVUZU:* ${totalPrizePool} Puan\n\n`;
+
+    // Ödül ekleme yardımcı fonksiyonu (Çiftlerse ödülü ikiye böler)
+    const awardPrize = (teamObj, prizeAmount, label) => {
+        if (!teamObj || !teamObj.p1) return;
+        let perPlayerPrize = prizeAmount;
+        if (isDoubles && teamObj.p2) perPlayerPrize = Math.round(prizeAmount / 2);
+
+        batch.update(db.collection('users').doc(teamObj.p1), { [pointField]: firebase.firestore.FieldValue.increment(perPlayerPrize) });
+        let names = userMap[teamObj.p1]?.isim || 'Bilinmeyen';
+        
+        if (isDoubles && teamObj.p2) {
+            batch.update(db.collection('users').doc(teamObj.p2), { [pointField]: firebase.firestore.FieldValue.increment(perPlayerPrize) });
+            names += ` & ${userMap[teamObj.p2]?.isim || 'Bilinmeyen'}`;
+        }
+        winnersSummaryText += `🏅 *${label}:* ${names} (+${prizeAmount} P)\n`;
+    };
+
+    // --- SENARYO A: LİG USULÜ TURNUVA (Podyum Modeli: %50, %30, %20) ---
+    if (tourData.systemType === 'league') {
+        // Lig puan durumu istatistiklerini simüle et ve sırala
+        let stats = {};
+        tourData.bracket.forEach(round => {
+            round.matches.forEach(m => {
+                if(!m.p1 || !m.p2) return;
+                const p1Id = m.p1.p1 + (m.p1.p2 ? "_" + m.p1.p2 : "");
+                const p2Id = m.p2.p1 + (m.p2.p2 ? "_" + m.p2.p2 : "");
+                if(!stats[p1Id]) stats[p1Id] = { obj: m.p1, pts: 0 };
+                if(!stats[p2Id]) stats[p2Id] = { obj: m.p2, pts: 0 };
+                if (m.winner) {
+                    if (m.winner.p1 === m.p1.p1) { stats[p1Id].pts += 3; stats[p2Id].pts += 1; }
+                    else { stats[p2Id].pts += 3; stats[p1Id].pts += 1; }
+                }
+            });
+        });
+        const sorted = Object.values(stats).sort((a,b) => b.pts - a.pts);
+        
+        if(sorted[0]) awardPrize(sorted[0].obj, Math.round(totalPrizePool * 0.50), "Lig Şampiyonu 🥇");
+        if(sorted[1]) awardPrize(sorted[1].obj, Math.round(totalPrizePool * 0.30), "Lig İkincisi 🥈");
+        if(sorted[2]) awardPrize(sorted[2].obj, Math.round(totalPrizePool * 0.20), "Lig Üçüncüsü 🥉");
+    } 
+    // --- SENARYO B: ELEMELİ / GRUPLU TURNUVA (ATP Kademeli Model: %60, %25, %7.5, %7.5) ---
+    else if (tourData.bracket && tourData.bracket.length > 0) {
+        const finalRound = tourData.bracket[tourData.bracket.length - 1];
+        const finalMatch = finalRound?.matches?.[0];
+        if (!finalMatch || !finalMatch.winner) {
+            throw new Error("Turnuva ağacı henüz tamamlanmadığı için ödül dağıtılamaz.");
+        }
+
+        // 1. Şampiyon (%60)
+        const championTeam = finalMatch.winner;
+        awardPrize(championTeam, Math.round(totalPrizePool * 0.60), "Turnuva Şampiyonu 👑");
+
+        // 2. Finalist (%25)
+        const finalistTeam = (finalMatch.p1.p1 === championTeam.p1) ? finalMatch.p2 : finalMatch.p1;
+        awardPrize(finalistTeam, Math.round(totalPrizePool * 0.25), "Finalist / İkinci 🥈");
+
+        // 3. Yarı Finalistler (Son turdan bir önceki turun elenenleri - Her birine %7.5)
+        if (tourData.bracket.length >= 2) {
+            const semiRound = tourData.bracket[tourData.bracket.length - 2];
+            semiRound.matches.forEach(m => {
+                const loserTeam = (m.winner?.p1 === m.p1?.p1) ? m.p2 : m.p1;
+                if(loserTeam && !loserTeam.isBye) {
+                    awardPrize(loserTeam, Math.round(totalPrizePool * 0.075), "Yarı Finalist 🥉");
+                }
+            });
+        }
+    }
+
+    // Çifte dağıtımı engellemek için kilidi vur
+    batch.update(db.collection('tournaments').doc(tourId), { prizeDistributed: true });
+
+    await batch.commit();
+    
+    // WhatsApp Grubuna Ödül Tebrik Raporunu Gönder
+    const WA_API_URL = "https://7107.api.greenapi.com"; 
+    const WA_INSTANCE_ID = "7107628348";                
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+    
+    const messageText = 
+        `💰 *TURNUVA ÖDÜL HAVUZU DAĞITILDI!* 💰\n\n` +
+        `🏆 *${tourData.name}* turnuvası ödül tescil işlemleri tamamlandı! Profesyonel ATP dağıtım modeline göre hesaplanan lig puanları şanslı raketlerin hesaplarına aktarılmıştır:\n\n` +
+        winnersSummaryText + `\n` +
+        `👏 Dereceye giren tüm sporcularımızı tebrik eder, yeni turnuvalarda başarılar dileriz! 🎾🔥`;
+
+    try {
+        await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+        });
+    } catch(e) { console.error(e); }
+};
+
+// Organizatör panelinden tek tıkla tetiklenecek manuel onarıcı
+window.manualDistributePrizePool = async function(tourId) {
+    if(!confirm("Mevcut açık/biten turnuvanın ödül havuzunu şu anki sıralamaya göre dağıtmak istediğinize emin misiniz?")) return;
+    try {
+        const snap = await db.collection('tournaments').doc(tourId).get();
+        if(!snap.exists) return alert("Turnuva bulunamadı.");
+        const tourData = snap.data();
+        
+        await window.distributeTournamentPrizePool(tourId, tourData);
+        alert("Ödül havuzu milimetrik olarak hesaplandı, kazananlara dağıtıldı ve WhatsApp grubuna tebrik raporu uçuruldu! 🚀🏆");
+        openTournamentDetail(tourId, (await db.collection('tournaments').doc(tourId).get()).data());
+    } catch(e) {
+        alert("Dağıtım yapılamadı: " + e.message);
+    }
+};
+
 
 }); // DOMContentLoaded SONU
