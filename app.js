@@ -2046,9 +2046,7 @@ function showNotification(msg, type='info') {
                 checkAndSendDailyPendingApprovalsSummary();
                 checkAndSendDailyLeaderboardSummary();
                 
-                initSpamWarning(); 
-                initOnboarding(); 
-                checkProfileCompleteness();
+                
             
             }).catch(err => console.error("Veriler yüklenirken hata:", err));
 
@@ -3538,10 +3536,13 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
                 }
             }
 
-            let extraPool = [];
+           let extraPool = [];
             data.groups.forEach(gr => {
-                for(let i = advCount; i < gr.players.length; i++) { 
-                    if (gr.players[i].played > 0) extraPool.push(gr.players[i]); 
+                // 💡 DÜZELTME: Döngü kaldırıldı! Sadece ve sadece grubun gerçek 3. sıradaki takımı havuzuna alınır.
+                // İndex 0=1., İndex 1=2., İndex 2=3. oyuncuyu temsil eder.
+                const thirdPlacePlayer = gr.players[advCount];
+                if (thirdPlacePlayer && thirdPlacePlayer.played > 0) {
+                    extraPool.push(thirdPlacePlayer);
                 }
             });
             
