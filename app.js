@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
         "Meşelipark Tenis Kulübü", "Evrensel Tenis", "Esas Tenis ve Spor Kulübü", "Podyum Tenis",
         "Bursa Yenigün Tenis Kortu", "Hüdavendigar Spor Tesisleri", "Yenigün Tenis Akademi",
         "Ertuğrul Sağlam Tenis Kortları", "Altınşehir Gençlik Merkezi", "Nilüfer Hobi Bahçeleri Tenis Sahası",
-        "Gd Academy Bursa", "Uni+ Sport Club Tenis Kortları", "Aslanlar Tenis Akademisi", "Ferdi / Bağımsız"    
+        "Gd Academy Bursa", "Uni+ Sport Club Tenis Kortları", "Aslanlar Tenis Akademisi", "BLS Sosyal Tesisleri", "Ferdi / Bağımsız"    
     ];
 
     // --- YARDIMCI: GÜVENLİ AVATAR OLUŞTURUCU (CORS HATASINI ÖNLER) ---
