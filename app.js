@@ -3476,16 +3476,16 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         
         group.players.forEach(p => { p.played = 0; p.won = 0; p.lost = 0; p.gamesWon = 0; p.gamesLost = 0; p.winRate = 0; p.groupPoints = 0; });
         
-        group.matches.forEach(m => {
+       group.matches.forEach(m => {
             if (m.winner && m.rawScore) {
                 const s = m.rawScore;
                 const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
                 const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
                 const s3m = parseInt(s.s3_me||0); const s3o = parseInt(s.s3_opp||0);
                 
-                const isTeam1Reporter = (m.reporterId === m.p1.p1 || m.reporterId === m.p1.p2);
-                const p1G = isTeam1Reporter ? (s1m + s2m + s3m) : (s1o + s2o + s3o);
-                const p2G = isTeam1Reporter ? (s1o + s2o + s3o) : (s1m + s2m + s3m);
+                // 💡 DÜZELTME: Raporlayan kontrolü tamamen kaldırılarak turnuva standartlarına uygun mutlak skor alındı
+                const p1G = s1m + s2m + s3m;
+                const p2G = s1o + s2o + s3o;
                 
                 const p1Id = m.p1.p1; const p2Id = m.p2.p1;
                 const p1Player = group.players.find(p => p.p1 === p1Id);
