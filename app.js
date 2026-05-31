@@ -4221,18 +4221,18 @@ if (btnRankSingles && btnRankDoubles) {
         }
     }
 
-    // --- TÜM LİGİN PUANLARINI SIFIRDAN HESAPLAMA MOTORU (MANUEL DEĞİŞİKLİKLER İÇİN) ---
+// --- 🛠️ TÜM LİGİN PUANLARINI SIFIRDAN HESAPLAMA VE ÖDÜL HAVUZLARINI KORUMA MOTORU ---
     window.recalculateAllPoints = async function() {
-        if(!confirm("DİKKAT: Veritabanındaki manuel değişiklikler nedeniyle bozulan puanları düzeltmek için tüm ligin puanları maç geçmişine bakılarak SIFIRDAN hesaplanacaktır. Onaylıyor musunuz?")) return;
+        if(!confirm("DİKKAT: Veritabanındaki manuel değişiklikler nedeniyle bozulan puanları düzeltmek için tüm ligin puanları maç geçmişine bakılarak SIFIRDAN hesaplanacaktır. Turnuva büyük ödülleri de korunacaktır. Onaylıyor musunuz?")) return;
         try {
-            // Ekrana yükleniyor yazısı koy
+            // Ekrana yükleniyor efekti koyuyoruz
             const loading = document.createElement('div');
             loading.id = 'recalc-loading';
-            loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:white;display:flex;justify-content:center;align-items:center;z-index:9999;font-size:1.2em;font-weight:bold;text-align:center;padding:20px;';
-            loading.innerHTML = 'Lig verileri taranıyor ve puanlar yeniden dağıtılıyor...<br>Lütfen bekleyin ⏳';
+            loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;font-size:1.2em;font-weight:bold;text-align:center;padding:20px;';
+            loading.innerHTML = '<div>Lig verileri taranıyor ve puanlar sıfırdan inşa ediliyor...</div><div style="font-size:0.8em; color:#ff9800; margin-top:10px;">Turnuva ödül havuzları korunuyor, lütfen sekmeyi kapatmayın ⏳</div>';
             document.body.appendChild(loading);
 
-            // 1. Tüm kullanıcıları al ve puanlarını sıfırla (1000)
+            // 1. ADIM: Tüm kullanıcıları al ve başlangıç taban puanına (1000) sıfırla
             const usersSnap = await db.collection('users').get();
             let userStats = {};
             usersSnap.forEach(doc => {
@@ -4245,24 +4245,24 @@ if (btnRankSingles && btnRankDoubles) {
                 };
             });
 
-            // 2. Tüm bitmiş maçları çek
+            // 2. ADIM: Tüm tamamlanmış lig ve lobi maçlarını çekip standart puanları hesapla
             const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
 
             matchesSnap.forEach(doc => {
                 const m = doc.data();
                 const wid = m.kayitliKazananID;
-                if(!wid) return; // Kazananı belli olmayan maçları atla
+                if(!wid) return; // Kazananı elle seçilmemiş hatalı maçları pas geç
                 
                 const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
 
-                // Partnerleri de yakala
+                // Partnerleri ayrıştır
                 let wPartnerId = null; let lPartnerId = null;
                 if (!(m.macFormati || '').includes('Tekler')) {
                     wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
                     lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
                 }
 
-                // 3. Puan Matematiği
+                // Standart Set ve Averaj Puan Matematiği
                 let wg = 0, lg = 0;
                 if(m.skor) {
                     const s = m.skor;
@@ -4284,7 +4284,7 @@ if (btnRankSingles && btnRankDoubles) {
                 let winPoints = 50 + bonusW; let losePoints = 50 + bonusL;
                 if(m.macTipi === 'Meydan Okuma') { winPoints = m.bahisPuani + bonusW; losePoints = -m.bahisPuani + bonusL; }
 
-                // Puanları hanelere yazma fonksiyonu
+                // Puanları lokal bellek havuzuna işleme fonksiyonu
                 const applyToUser = (uid, isWin) => {
                     if(!uid || !userStats[uid]) return;
                     userStats[uid].macSayisi += 1;
@@ -4297,7 +4297,6 @@ if (btnRankSingles && btnRankDoubles) {
                     }
                 };
 
-                // Puanları Dağıt
                 applyToUser(wid, true);
                 applyToUser(lid, false);
                 if (!(m.macFormati || '').includes('Tekler')) {
@@ -4306,7 +4305,87 @@ if (btnRankSingles && btnRankDoubles) {
                 }
             });
 
-            // 4. Yeni Puanları Veritabanına Topluca Kaydet
+            // 🚀 3. ADIM [KRİTİK GÜVENLİK]: Ödülü Dağıtılmış Turnuvaları Bul ve Büyük Havuz Puanlarını Geri Ekle
+            const tourSnap = await db.collection('tournaments').where('prizeDistributed', '==', true).get();
+            
+            tourSnap.forEach(tourDoc => {
+                const tourData = tourDoc.data();
+                const fee = tourData.fee || 0;
+                const participants = tourData.participants || [];
+                if (fee === 0 || participants.length === 0) return;
+
+                const isDoubles = !(tourData.format || '').includes('Tekler');
+                const pointField = isDoubles ? 'ciftlerPuani' : 'toplamPuan';
+
+                // Turnuvadaki toplam tekil oyuncu sayısını bul (Havuz hesaplaması için)
+                let totalPlayersCount = 0;
+                participants.forEach(p => {
+                    if (p.p1) totalPlayersCount++;
+                    if (p.p2) totalPlayersCount++;
+                });
+
+                const totalPrizePool = totalPlayersCount * fee;
+                if (totalPrizePool === 0) return;
+
+                // Ödülü lokal hafızadaki oyuncuya mühürleyen iç fonksiyon
+                const addPrizeToMemory = (teamObj, prizeAmount) => {
+                    if (!teamObj || !teamObj.p1) return;
+                    let perPlayerPrize = prizeAmount;
+                    
+                    // Çiftler takımı ise büyük ödül partnerler arasında eşit bölünür
+                    if (isDoubles && teamObj.p2) perPlayerPrize = Math.round(prizeAmount / 2);
+
+                    if (userStats[teamObj.p1]) userStats[teamObj.p1][pointField] += perPlayerPrize;
+                    if (isDoubles && teamObj.p2 && userStats[teamObj.p2]) userStats[teamObj.p2][pointField] += perPlayerPrize;
+                };
+
+                // --- SENARYO A: LİG USULÜ TURNUVA (Podyum Modeli: %50, %30, %20) REKONSTRÜKSİYONU ---
+                if (tourData.systemType === 'league' && tourData.bracket) {
+                    let statsLeague = {};
+                    tourData.bracket.forEach(round => {
+                        round.matches.forEach(m => {
+                            if(!m.p1 || !m.p2) return;
+                            const p1Id = m.p1.p1 + (m.p1.p2 ? "_" + m.p1.p2 : "");
+                            const p2Id = m.p2.p1 + (m.p2.p2 ? "_" + m.p2.p2 : "");
+                            if(!statsLeague[p1Id]) statsLeague[p1Id] = { obj: m.p1, pts: 0 };
+                            if(!statsLeague[p2Id]) statsLeague[p2Id] = { obj: m.p2, pts: 0 };
+                            if (m.winner) {
+                                if (m.winner.p1 === m.p1.p1) { statsLeague[p1Id].pts += 3; statsLeague[p2Id].pts += 1; }
+                                else { statsLeague[p2Id].pts += 3; statsLeague[p1Id].pts += 1; }
+                            }
+                        });
+                    });
+                    const sortedLeague = Object.values(statsLeague).sort((a,b) => b.pts - a.pts);
+                    if(sortedLeague[0]) addPrizeToMemory(sortedLeague[0].obj, Math.round(totalPrizePool * 0.50));
+                    if(sortedLeague[1]) addPrizeToMemory(sortedLeague[1].obj, Math.round(totalPrizePool * 0.30));
+                    if(sortedLeague[2]) addPrizeToMemory(sortedLeague[2].obj, Math.round(totalPrizePool * 0.20));
+                } 
+                // --- SENARYO B: ELEMELİ / GRUPLU TURNUVA (ATP Kademeli Model: %60, %25, %7.5) REKONSTRÜKSİYONU ---
+                else if (tourData.bracket && tourData.bracket.length > 0) {
+                    const finalRound = tourData.bracket[tourData.bracket.length - 1];
+                    const finalMatch = finalRound?.matches?.[0];
+                    if (finalMatch && finalMatch.winner) {
+                        const championTeam = finalMatch.winner;
+                        addPrizeToMemory(championTeam, Math.round(totalPrizePool * 0.60)); // %60 Şampiyona
+
+                        const finalistTeam = (finalMatch.p1.p1 === championTeam.p1) ? finalMatch.p2 : finalMatch.p1;
+                        addPrizeToMemory(finalistTeam, Math.round(totalPrizePool * 0.25)); // %25 Finaliste
+
+                        // Yarı finalistleri bul ve her birine %7.5 ekle
+                        if (tourData.bracket.length >= 2) {
+                            const semiRound = tourData.bracket[tourData.bracket.length - 2];
+                            semiRound.matches.forEach(m => {
+                                const loserTeam = (m.winner?.p1 === m.p1?.p1) ? m.p2 : m.p1;
+                                if(loserTeam && !loserTeam.isBye) {
+                                    addPrizeToMemory(loserTeam, Math.round(totalPrizePool * 0.075));
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+
+            // 4. ADIM: Hesaplanan Kusursuz Yeni Puanları Veritabanına Topluca (Batch) Yazdır
             const batch = db.batch();
             for (const uid in userStats) {
                 const u = userStats[uid];
@@ -4320,11 +4399,11 @@ if (btnRankSingles && btnRankDoubles) {
 
             await batch.commit();
             document.getElementById('recalc-loading').remove();
-            alert("Muazzam! Tüm lig puanları mevcut maçlara göre sıfırdan hesaplandı ve hak edenlere teslim edildi! ✅");
+            alert("Muazzam! Tüm lig puanları, tekil maçlar ve turnuva ödül havuzları taranarak sıfırdan başarıyla onarıldı! 🚀👑");
             window.location.reload();
         } catch(e) {
             console.error(e);
-            alert("Hata oluştu: " + e.message);
+            alert("Onarım sırasında hata oluştu: " + e.message);
             if(document.getElementById('recalc-loading')) document.getElementById('recalc-loading').remove();
         }
     };
