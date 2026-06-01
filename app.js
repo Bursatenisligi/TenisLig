@@ -2081,6 +2081,14 @@ function showNotification(msg, type='info') {
                     if(editNotificationPreference) editNotificationPreference.value = u.bildirimTercihi || 'ses'; if(editProfilePreview) editProfilePreview.src = u.fotoURL || getSafeAvatar(u.isim);
                     const emailCheckbox = document.getElementById('edit-email-notify'); if(emailCheckbox) { emailCheckbox.checked = (u.emailNotifications !== false); }
                     renderBadges(auth.currentUser.uid, 'my-badges-container'); loadUserPhotos();
+                    const adminPanel = document.getElementById('profile-admin-panel');
+                    if (adminPanel) {
+                        if (u.rol === 'admin') {
+                            adminPanel.style.display = 'block';
+                        } else {
+                            adminPanel.style.display = 'none';
+                        }
+                        }    
                 }
             }
         });
@@ -2936,7 +2944,7 @@ window.openTournamentDetail = function(tourId, tourData) {
             else actionButtonsHTML = `<p style="color:#d35400; font-size:0.8em; font-weight:bold; text-align:center;">Maçlar başladığı için kayıtlar kilitlendi.</p>`;
         }
 
-        adminArea.innerHTML = `
+adminArea.innerHTML = `
             <h4 style="margin-top:0; color:#856404;">🛠️ Organizatör Paneli</h4>
             <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
                 ${!matchStarted ? `<button id="btn-admin-add-player" class="btn-main" style="background:#28a745; font-size:0.8em; padding:8px; flex:1;">+ Oyuncu Ekle</button>` : ''}
@@ -2963,9 +2971,10 @@ window.openTournamentDetail = function(tourId, tourData) {
                 <button onclick="generateGroupStageDraw('${tourId}')" class="btn-save" style="margin-top:5px; background:#007bff;">Grupları Oluştur ve Başlat 🚀</button>
             </div>
 
-            <button onclick="syncTournamentMatches('${tourId}')" style="background:none; border:none; color:#17a2b8; text-decoration:underline; width:100%; margin-top:15px; font-weight:bold; box-shadow:none;">🔄 Hatalı Onaylanan Maçları Senkronize Et</button>
-            <button onclick="window.recalculateAllPoints()" style="background:none; border:none; color:#28a745; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🛠️ Tüm Ligin Puanlarını Sıfırdan Onar</button>
-            <button onclick="deleteTournament('${tourId}')" style="background:none; border:none; color:#dc3545; text-decoration:underline; width:100%; margin-top:10px; font-weight:bold; box-shadow:none;">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                <button onclick="syncTournamentMatches('${tourId}')" class="btn-main" style="background:#17a2b8; color:white; padding:12px; font-size:0.85em; font-weight:bold; border-radius:8px; border:none; width:100%; box-shadow: 0 4px 10px rgba(23,162,184,0.2);">🔄 Hatalı Onaylanan Maçları Senkronize Et</button>
+                <button onclick="deleteTournament('${tourId}')" class="btn-main" style="background:#dc3545; color:white; padding:12px; font-size:0.85em; font-weight:bold; border-radius:8px; border:none; width:100%; box-shadow: 0 4px 10px rgba(220,53,69,0.2);">🗑️ Bu Turnuvayı İptal Et ve Tamamen Sil</button>
+            </div>
         `;
         
         const btnAdd = document.getElementById('btn-admin-add-player');
@@ -3536,21 +3545,89 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
                 }
             }
 
-           let extraPool = [];
-            data.groups.forEach(gr => {
-                // 💡 DÜZELTME: Döngü kaldırıldı! Sadece ve sadece grubun gerçek 3. sıradaki takımı havuzuna alınır.
-                // İndex 0=1., İndex 1=2., İndex 2=3. oyuncuyu temsil eder.
-                const thirdPlacePlayer = gr.players[advCount];
-                if (thirdPlacePlayer && thirdPlacePlayer.played > 0) {
-                    extraPool.push(thirdPlacePlayer);
-                }
-            });
-            
-            extraPool.sort((a, b) => {
-                if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
-                return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
-            });
-
+// 🚀 BÜYÜK GRUP NORMALİZASYONU (UEFA STANDARDI): 
+                // Eğer grupların bakiye takım sayıları eşit değilse (Örn: Bir grup 5, diğerleri 4 takımlıysa),
+                // Fazla maç yapan grubun 3.sünü adil değerlendirmek için, o grubun son sırasındaki takım(lar) ile yapılan maçlar hesaptan düşülür!
+                const minTeams = Math.min(...data.groups.map(gr => gr.players.length));
+                
+                let extraPool = [];
+                data.groups.forEach(gr => {
+                    const thirdPlacePlayer = gr.players[advCount];
+                    if (thirdPlacePlayer && thirdPlacePlayer.played > 0) {
+                        // 💡 Derin kopya oluşturuyoruz ki ana grup puan durumu tablosu (görünümü) bozulmasın
+                        let normalizedPlayer = { ...thirdPlacePlayer };
+                        
+                        // Eğer bu grup minimum grup boyutundan büyükse (Örn: 5 kişilik grup) normalizasyon yap
+                        if (gr.players.length > minTeams) {
+                            const excludeCount = gr.players.length - minTeams;
+                            
+                            // Grubun en altında kalan (elenmiş/sonuncu) takımları diziye al
+                            const bottomPlayers = gr.players.slice(gr.players.length - excludeCount);
+                            const ignoredUids = bottomPlayers.map(p => p.p1);
+                            
+                            let normalizedPlayed = 0;
+                            let normalizedWon = 0;
+                            let normalizedLost = 0;
+                            let normalizedGamesWon = 0;
+                            let normalizedGamesLost = 0;
+                            let normalizedGroupPoints = 0;
+                            
+                            gr.matches.forEach(m => {
+                                const involvesMe = (m.p1.p1 === thirdPlacePlayer.p1 || m.p2.p1 === thirdPlacePlayer.p1);
+                                if (!involvesMe || !m.winner || !m.rawScore) return;
+                                
+                                const opponentUid = (m.p1.p1 === thirdPlacePlayer.p1) ? m.p2.p1 : m.p1.p1;
+                                
+                                // ❌ EĞER RAKİP, GRUBUN SON SIRASINDAKİ TAKIMLARDAN BİRİYSE BU MAÇI HESAP DIŞI BIRAK!
+                                if (ignoredUids.includes(opponentUid)) {
+                                    console.log(`Normalizasyon: En iyi 3. sıralaması için ${thirdPlacePlayer.name} takımı üzerinden sonuncu (${userMap[opponentUid]?.isim}) ile yapılan maç hesaptan düşülüyor.`);
+                                    return; 
+                                }
+                                
+                                const s = m.rawScore;
+                                const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
+                                const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
+                                const s3m = parseInt(s.s3_me||0); const s3o = parseInt(s.s3_opp||0);
+                                
+                                const p1G = s1m + s2m + s3m;
+                                const p2G = s1o + s2o + s3o;
+                                
+                                const isMyTeamP1 = (m.p1.p1 === thirdPlacePlayer.p1);
+                                const myGames = isMyTeamP1 ? p1G : p2G;
+                                const oppGames = isMyTeamP1 ? p2G : p1G;
+                                
+                                normalizedPlayed++;
+                                normalizedGamesWon += myGames;
+                                normalizedGamesLost += oppGames;
+                                
+                                if (m.winner.p1 === thirdPlacePlayer.p1) {
+                                    normalizedWon++;
+                                    normalizedGroupPoints += 3;
+                                } else {
+                                    normalizedLost++;
+                                    normalizedGroupPoints += 1;
+                                }
+                            });
+                            
+                            // 💡 Temizlenmiş ve eşitlenmiş 4 maçlık averajı kopya nesneye mühürle
+                            normalizedPlayer.played = normalizedPlayed;
+                            normalizedPlayer.won = normalizedWon;
+                            normalizedPlayer.lost = normalizedLost;
+                            normalizedPlayer.gamesWon = normalizedGamesWon;
+                            normalizedPlayer.gamesLost = normalizedGamesLost;
+                            normalizedPlayer.groupPoints = normalizedGroupPoints;
+                            
+                            const totalGames = normalizedGamesWon + normalizedGamesLost;
+                            normalizedPlayer.winRate = totalGames > 0 ? (normalizedGamesWon / totalGames) * 100 : 0;
+                        }
+                        extraPool.push(normalizedPlayer);
+                    }
+                });
+                
+                extraPool.sort((a, b) => {
+                    if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
+                    return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
+                });
             for (let mIdx = 0; mIdx < bracket[0].matches.length; mIdx++) {
                 let m = bracket[0].matches[mIdx];
                 for (let slotKey of ['p1', 'p2']) {
