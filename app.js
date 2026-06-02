@@ -3551,83 +3551,88 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid, is
             }
 
 // 🚀 BÜYÜK GRUP NORMALİZASYONU (UEFA STANDARDI): 
-                // Eğer grupların bakiye takım sayıları eşit değilse (Örn: Bir grup 5, diğerleri 4 takımlıysa),
-                // Fazla maç yapan grubun 3.sünü adil değerlendirmek için, o grubun son sırasındaki takım(lar) ile yapılan maçlar hesaptan düşülür!
-                const minTeams = Math.min(...data.groups.map(gr => gr.players.length));
+// 🚀 BÜYÜK GRUP NORMALİZASYONU (UEFA STANDARDI) - BUG FIX GÜNCELLEMESİ
+const minTeams = Math.min(...data.groups.map(gr => gr.players.length));
+
+let extraPool = [];
+data.groups.forEach(gr => {
+    // 🛠️ KRİTİK DÜZELTME 1: Tüm grupların güncel puan durumunu net görmek için önce hepsini tek tek sıralıyoruz!
+    gr.players.forEach(p => {
+        const totalGames = p.gamesWon + p.gamesLost;
+        p.winRate = totalGames > 0 ? (p.gamesWon / totalGames) * 100 : 0;
+    });
+    gr.players.sort((a, b) => {
+        if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
+        return b.winRate - a.winRate || b.gamesWon - a.gamesWon || b.won - a.won;
+    });
+
+    // Artık grup kesin olarak sıralı olduğu için gerçek 3. sıradaki takımı hatasız alıyoruz
+    const thirdPlacePlayer = gr.players[advCount];
+    if (thirdPlacePlayer && thirdPlacePlayer.played > 0) {
+        let normalizedPlayer = { ...thirdPlacePlayer };
+        
+        // Eğer bu grup 5 kişilik büyük grupsa, adaleti sağlamak için sonuncu ile yapılan maçları düşür
+        if (gr.players.length > minTeams) {
+            const excludeCount = gr.players.length - minTeams;
+            // 🛠️ KRİTİK DÜZELTME 2: Sıralama düzeldiği için artık en alttaki gerçek sonuncuyu (Cemre & Ali) hatasız yakalıyoruz!
+            const bottomPlayers = gr.players.slice(gr.players.length - excludeCount);
+            const ignoredUids = bottomPlayers.map(p => p.p1);
+            
+            let normalizedPlayed = 0;
+            let normalizedWon = 0;
+            let normalizedLost = 0;
+            let normalizedGamesWon = 0;
+            let normalizedGamesLost = 0;
+            let normalizedGroupPoints = 0;
+            
+            gr.matches.forEach(m => {
+                const involvesMe = (m.p1.p1 === thirdPlacePlayer.p1 || m.p2.p1 === thirdPlacePlayer.p1);
+                if (!involvesMe || !m.winner || !m.rawScore) return;
                 
-                let extraPool = [];
-                data.groups.forEach(gr => {
-                    const thirdPlacePlayer = gr.players[advCount];
-                    if (thirdPlacePlayer && thirdPlacePlayer.played > 0) {
-                        // 💡 Derin kopya oluşturuyoruz ki ana grup puan durumu tablosu (görünümü) bozulmasın
-                        let normalizedPlayer = { ...thirdPlacePlayer };
-                        
-                        // Eğer bu grup minimum grup boyutundan büyükse (Örn: 5 kişilik grup) normalizasyon yap
-                        if (gr.players.length > minTeams) {
-                            const excludeCount = gr.players.length - minTeams;
-                            
-                            // Grubun en altında kalan (elenmiş/sonuncu) takımları diziye al
-                            const bottomPlayers = gr.players.slice(gr.players.length - excludeCount);
-                            const ignoredUids = bottomPlayers.map(p => p.p1);
-                            
-                            let normalizedPlayed = 0;
-                            let normalizedWon = 0;
-                            let normalizedLost = 0;
-                            let normalizedGamesWon = 0;
-                            let normalizedGamesLost = 0;
-                            let normalizedGroupPoints = 0;
-                            
-                            gr.matches.forEach(m => {
-                                const involvesMe = (m.p1.p1 === thirdPlacePlayer.p1 || m.p2.p1 === thirdPlacePlayer.p1);
-                                if (!involvesMe || !m.winner || !m.rawScore) return;
-                                
-                                const opponentUid = (m.p1.p1 === thirdPlacePlayer.p1) ? m.p2.p1 : m.p1.p1;
-                                
-                                // ❌ EĞER RAKİP, GRUBUN SON SIRASINDAKİ TAKIMLARDAN BİRİYSE BU MAÇI HESAP DIŞI BIRAK!
-                                if (ignoredUids.includes(opponentUid)) {
-                                    console.log(`Normalizasyon: En iyi 3. sıralaması için ${thirdPlacePlayer.name} takımı üzerinden sonuncu (${userMap[opponentUid]?.isim}) ile yapılan maç hesaptan düşülüyor.`);
-                                    return; 
-                                }
-                                
-                                const s = m.rawScore;
-                                const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
-                                const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
-                                const s3m = parseInt(s.s3_me||0); const s3o = parseInt(s.s3_opp||0);
-                                
-                                const p1G = s1m + s2m + s3m;
-                                const p2G = s1o + s2o + s3o;
-                                
-                                const isMyTeamP1 = (m.p1.p1 === thirdPlacePlayer.p1);
-                                const myGames = isMyTeamP1 ? p1G : p2G;
-                                const oppGames = isMyTeamP1 ? p2G : p1G;
-                                
-                                normalizedPlayed++;
-                                normalizedGamesWon += myGames;
-                                normalizedGamesLost += oppGames;
-                                
-                                if (m.winner.p1 === thirdPlacePlayer.p1) {
-                                    normalizedWon++;
-                                    normalizedGroupPoints += 3;
-                                } else {
-                                    normalizedLost++;
-                                    normalizedGroupPoints += 1;
-                                }
-                            });
-                            
-                            // 💡 Temizlenmiş ve eşitlenmiş 4 maçlık averajı kopya nesneye mühürle
-                            normalizedPlayer.played = normalizedPlayed;
-                            normalizedPlayer.won = normalizedWon;
-                            normalizedPlayer.lost = normalizedLost;
-                            normalizedPlayer.gamesWon = normalizedGamesWon;
-                            normalizedPlayer.gamesLost = normalizedGamesLost;
-                            normalizedPlayer.groupPoints = normalizedGroupPoints;
-                            
-                            const totalGames = normalizedGamesWon + normalizedGamesLost;
-                            normalizedPlayer.winRate = totalGames > 0 ? (normalizedGamesWon / totalGames) * 100 : 0;
-                        }
-                        extraPool.push(normalizedPlayer);
-                    }
-                });
+                const opponentUid = (m.p1.p1 === thirdPlacePlayer.p1) ? m.p2.p1 : m.p1.p1;
+                
+                // ❌ Eğer rakip, grubun gerçek sonuncusu ise bu maçı hesaba KATMADAN geç!
+                if (ignoredUids.includes(opponentUid)) return;
+                
+                const s = m.rawScore;
+                const s1m = parseInt(s.s1_me||0); const s1o = parseInt(s.s1_opp||0);
+                const s2m = parseInt(s.s2_me||0); const s2o = parseInt(s.s2_opp||0);
+                const s3m = parseInt(s.s3_me||0); const s3o = parseInt(s.s3_opp||0);
+                
+                const p1G = s1m + s2m + s3m;
+                const p2G = s1o + s2o + s3o;
+                
+                const isMyTeamP1 = (m.p1.p1 === thirdPlacePlayer.p1);
+                const myGames = isMyTeamP1 ? p1G : p2G;
+                const oppGames = isMyTeamP1 ? p2G : p1G;
+                
+                normalizedPlayed++;
+                normalizedGamesWon += myGames;
+                normalizedGamesLost += oppGames;
+                
+                if (m.winner.p1 === thirdPlacePlayer.p1) {
+                    normalizedWon++;
+                    normalizedGroupPoints += 3;
+                } else {
+                    normalizedLost++;
+                    normalizedGroupPoints += 1;
+                }
+            });
+            
+            // Filtrelenmiş 3 maçlık temiz bakiye verilerini oyuncu kopyasına mühürle
+            normalizedPlayer.played = normalizedPlayed;
+            normalizedPlayer.won = normalizedWon;
+            normalizedPlayer.lost = normalizedLost;
+            normalizedPlayer.gamesWon = normalizedGamesWon;
+            normalizedPlayer.gamesLost = normalizedGamesLost;
+            normalizedPlayer.groupPoints = normalizedGroupPoints;
+            
+            const totalGames = normalizedGamesWon + normalizedGamesLost;
+            normalizedPlayer.winRate = totalGames > 0 ? (normalizedGamesWon / totalGames) * 100 : 0;
+        }
+        extraPool.push(normalizedPlayer);
+    }
+});
                 
                 extraPool.sort((a, b) => {
                     if (data.pointsSystem === 'threePoint') return (b.groupPoints || 0) - (a.groupPoints || 0) || b.winRate - a.winRate || b.gamesWon - a.gamesWon;
