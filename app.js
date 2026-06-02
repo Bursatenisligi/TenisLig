@@ -2146,6 +2146,7 @@ function showNotification(msg, type='info') {
             const pointsSystem = document.getElementById('tour-points-system') ? document.getElementById('tour-points-system').value : 'winRate';
             const fee = parseInt(document.getElementById('tour-fee').value) || 0;
             const deadline = document.getElementById('tour-deadline').value;
+            const sendWhatsApp = document.getElementById('tour-send-whatsapp') ? document.getElementById('tour-send-whatsapp').checked : false;
   // YENİ KAYIT ALANLARI VE LİG YAPISI
             const isDoubles = !format.includes('Tekler');
             const regType = isDoubles ? document.getElementById('tour-reg-type').value : 'manual';
@@ -2189,13 +2190,17 @@ function showNotification(msg, type='info') {
                     leagueTeamType: leagueTeamType,
                     standingsType: standingsType,
                     teamsGenerated: false,
-                    participants: [] 
+                    participants: [],
+                    sendWhatsApp: sendWhatsApp // ◄ BURAYI EKLEDİK
                 });
 
                 alert("Turnuva başarıyla oluşturuldu! 🏆");
 
                 // [YENİ EKLEDİĞİMİZ SATIR] WhatsApp Grubuna resmi ve detayları uçurur
-                window.sendWhatsAppTournamentNotification(name, format, fee);
+                // Sadece admin onay verdiyse WhatsApp grubuna bildirim fırlat
+                    if (sendWhatsApp && typeof window.sendWhatsAppTournamentNotification === 'function') {
+                 window.sendWhatsAppTournamentNotification(name, format, fee);
+                }
 
                 createTournamentForm.style.display = 'none';
                 tournamentListView.style.display = 'block';
@@ -2812,8 +2817,8 @@ window.syncTournamentMatches = async function(tourId) {
             if ((m.macFormati || '').includes('Tekler') && (m.oyuncu1PartnerID || m.oyuncu2PartnerID)) { batch.update(doc.ref, { macFormati: 'Çiftler' }); }
 
             if (m.matchTag && wid) {
-                await window.advanceTournamentBracket(tourId, m.matchTag, wid);
-            }
+        await window.advanceTournamentBracket(tourId, m.matchTag, wid, true); 
+    }
             repairCount++;
         }
 
@@ -3437,7 +3442,7 @@ window.adminAddParticipant = async function(tourId) {
     };
 
 // --- 2. TUR ATLATMA VE GRUP HESAPLAMA MOTORU ---
-window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
+window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid, isSync = false) {
     const tourRef = db.collection('tournaments').doc(tourId);
     const tourSnap = await tourRef.get();
     const data = tourSnap.data();
@@ -3675,9 +3680,10 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         await tourRef.update({ groups: groups, bracket: bracket });
 
         // WhatsApp Canlı Skor + Çizgili Tablo Bildirimi
-        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-        }
+        // WhatsApp Canlı Skor + Çizgili Tablo Bildirimi (Sessiz Mod Kontrollü)
+if (!isSync && data.sendWhatsApp !== false && typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+    await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+}
         return; 
     }
     
@@ -3696,9 +3702,9 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
 
         await tourRef.update({ bracket: bracket });
         
-        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-        }
+if (!isSync && data.sendWhatsApp !== false && typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+    await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+}
         return;
     }
 
@@ -3731,15 +3737,16 @@ window.advanceTournamentBracket = async function(tourId, matchTag, winnerUid) {
         await tourRef.update({ bracket: bracket, status: data.status });
 
         // WhatsApp Canlı Skor + Eleme Ağacı Güncel Durum Mesajı
-        if (typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
-            await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
-        }
+// WhatsApp Canlı Skor + Eleme Ağacı Güncel Durum Mesajı (Sessiz Mod Kontrollü)
+if (!isSync && data.sendWhatsApp !== false && typeof window.sendWhatsAppMatchResultAndStandingsNotification === 'function') {
+    await window.sendWhatsAppMatchResultAndStandingsNotification(tourId, matchTag, mData);
+}
 
-        // --- KORUNAN E-POSTA MOTORU + ADIM ADIM YENİ WHATSAPP DUYURU SİSTEMİ ---
-        const currentRoundMatches = bracket[rIdx].matches;
-        const isRoundFinished = currentRoundMatches.every(m => m.winner || m.score === "Bay Geçti" || m.score === "Oynamadan Geçti");
+// --- KORUNAN E-POSTA MOTORU + ADIM ADIM YENİ WHATSAPP DUYURU SİSTEMİ ---
+const currentRoundMatches = bracket[rIdx].matches;
+const isRoundFinished = currentRoundMatches.every(m => m.winner || m.score === "Bay Geçti" || m.score === "Oynamadan Geçti");
 
-        if (isRoundFinished) {
+if (isRoundFinished && !isSync && data.sendWhatsApp !== false) {
             const roundName = bracket[rIdx].roundName;
             const isFinal = (rIdx === bracket.length - 1);
 

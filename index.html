@@ -305,7 +305,10 @@
 
         <label class="input-label">Son Kayıt Tarihi</label>
         <input type="datetime-local" id="tour-deadline">
-
+<div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px; display:flex; align-items:center; gap:10px; border: 1px dashed #25d366;">
+            <input type="checkbox" id="tour-send-whatsapp" style="width:18px; height:18px;" checked>
+            <label for="tour-send-whatsapp" style="margin:0; font-weight:600; color:#333; font-size:0.9em;">WhatsApp Grubuna Bildirim Gitsin mi? 🟢</label>
+        </div>
         <button id="btn-save-tournament" class="btn-save" style="margin-top: 15px;">Turnuvayı Başlat 🚀</button>
     </div>
 
@@ -928,7 +931,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=133"></script>
+    <script src="app.js?=135"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
