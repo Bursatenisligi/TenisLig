@@ -3917,11 +3917,23 @@ const getPlayerFullName = (p) => {
 
                         // Oyun (Game) Averajlarını Hesapla
                         let p1G = 0; let p2G = 0;
-                        if (m.rawScore) {
-                            const s = m.rawScore;
-                            p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0) + parseInt(s.s3_me||0);
-                            p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0) + parseInt(s.s3_opp||0);
+                    if (m.rawScore) {
+                        const s = m.rawScore;
+                        const s3m = parseInt(s.s3_me || 0);
+                        const s3o = parseInt(s.s3_opp || 0);
+                        
+                        // 💡 Eğer 3. sette oyunculardan biri 10 veya daha fazla puana ulaşmışsa bu bir Süper Tie-Break'tir!
+                        const isSuperTieBreak = (s3m >= 10 || s3o >= 10);
+                        
+                        p1G = parseInt(s.s1_me || 0) + parseInt(s.s2_me || 0);
+                        p2G = parseInt(s.s1_opp || 0) + parseInt(s.s2_opp || 0);
+                        
+                        // Sadece normal set ise oyun sayılarını averaja dahil et, Süper TB ise dahil etme!
+                        if (!isSuperTieBreak) {
+                            p1G += s3m;
+                            p2G += s3o;
                         }
+                    }
                         
                         const updateGames = (id, wonG, lostG) => {
                             if(stats[id]) { stats[id].gw += wonG; stats[id].gl += lostG; }
@@ -5082,8 +5094,20 @@ async function renderRegistrationArea(tourId, tourData, myUid) {
                             }
                             let p1G = 0, p2G = 0;
                             if (m.rawScore) {
-                                p1G = parseInt(m.rawScore.s1_me||0) + parseInt(m.rawScore.s2_me||0) + parseInt(m.rawScore.s3_me||0);
-                                p2G = parseInt(m.rawScore.s1_opp||0) + parseInt(m.rawScore.s2_opp||0) + parseInt(m.rawScore.s3_opp||0);
+                                const s = m.rawScore;
+                                const s3m = parseInt(s.s3_me || 0);
+                                const s3o = parseInt(s.s3_opp || 0);
+                                
+                                // 💡 WhatsApp raporu için de Süper Tie-Break kontrolü devrede!
+                                const isSuperTieBreak = (s3m >= 10 || s3o >= 10);
+                                
+                                p1G = parseInt(s.s1_me || 0) + parseInt(s.s2_me || 0);
+                                p2G = parseInt(s.s1_opp || 0) + parseInt(s.s2_opp || 0);
+                                
+                                if (!isSuperTieBreak) {
+                                    p1G += s3m;
+                                    p2G += s3o;
+                                }
                             }
                             const updateGames = (id, wonG, lostG) => { if(stats[id]) { stats[id].gw += wonG; stats[id].gl += lostG; } };
                             updateGames(p1Id, p1G, p2G); updateGames(p2Id, p2G, p1G);
