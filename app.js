@@ -1012,8 +1012,12 @@ try {
                 if(m && m.oyuncu1ID) {
                     const subject = "✅ Kort İlanın Kabul Edildi!";
                     const body = `<p><strong>${me.isim}</strong> açık kort ilanını kabul etti!</p><p>Hemen uygulamaya girip maç tarihini ve kortu belirleyebilirsiniz.</p><p><a href="https://bursatenisligi.github.io/TenisLig/">Uygulamaya Git</a></p>`;
-                    sendNotificationEmail(m.oyuncu1ID, subject, body);
+                    sendNotificationEmail(m.oyuncu1ID, subject, body);}
+                    // Açık lobi ilanı kabul edildiğinde WhatsApp duyurusunu fırlat
+                    if (typeof window.sendWhatsAppOpenAdAcceptedNotification === 'function') {
+                     window.sendWhatsAppOpenAdAcceptedNotification(m);
                 }
+                    
             });
 
             alert("Maç kabul edildi! İlan sahibine bildirim gönderildi. 📨"); 
@@ -1501,6 +1505,11 @@ function showMatchDetail(matchDocId) {
                         const myName = userMap[currentUserID]?.isim || 'Rakibin'; const subject = "✅ Maç Teklifin Kabul Edildi!";
                         const body = `<p><strong>${myName}</strong> maç teklifini kabul etti!</p><p>Hemen uygulamaya girip maç tarihini ve kortu belirleyebilirsiniz.</p><p><a href="https://bursatenisligi.github.io/TenisLig/">Uygulamaya Git</a></p>`;
                         sendNotificationEmail(match.oyuncu1ID, subject, body);
+                        // Özel meydan okuma kabul edildiğinde WhatsApp duyurusunu fırlat
+                        const updatedMatchData = { ...match, oyuncu2ID: currentUserID, oyuncu2PartnerID: partnerID };
+                        if (typeof window.sendWhatsAppSpecificChallengeAcceptedNotification === 'function') {
+                        window.sendWhatsAppSpecificChallengeAcceptedNotification(updatedMatchData);
+   }
                         alert("Kabul edildi! Rakibine mail bildirimi gönderildi. 📨"); goBackToList();
                     } catch (err) { console.error(err); alert("Kabul edilirken hata oluştu: " + err.message); }
                 };
@@ -1671,7 +1680,13 @@ function showMatchDetail(matchDocId) {
     async function saveMatchSchedule(id) { 
         const cType = document.getElementById('dynamic-court-type').value; const venue = document.getElementById('dynamic-venue-select').value; const timeVal = document.getElementById('dynamic-time-input').value;
         if(!cType || !venue || !timeVal) { alert("Lütfen Kort Tipi, Kort Seçimi ve Tarih/Saat bilgilerini eksiksiz girin."); return; }
-        try { await db.collection('matches').doc(id).update({ kortTipi: cType, macYeri: venue, macZamani: firebase.firestore.Timestamp.fromDate(new Date(timeVal)) }); alert("Maç planı başarıyla kaydedildi! ✅"); showMatchDetail(id); } catch(e) { console.error(e); alert("Plan kaydedilirken hata oluştu."); }
+        try { await db.collection('matches').doc(id).update({ kortTipi: cType, macYeri: venue, macZamani: firebase.firestore.Timestamp.fromDate(new Date(timeVal)) }); 
+        // Maç planı (Kort/Zaman) sisteme işlendiğinde WhatsApp'a takvimi fırlat
+        const freshMatchDoc = await db.collection('matches').doc(id).get();
+            if (freshMatchDoc.exists && typeof window.sendWhatsAppMatchScheduledNotification === 'function') {
+       window.sendWhatsAppMatchScheduledNotification(freshMatchDoc.data());
+        }
+        alert("Maç planı başarıyla kaydedildi! ✅"); showMatchDetail(id); } catch(e) { console.error(e); alert("Plan kaydedilirken hata oluştu."); }
     }
     
     async function saveMatchResult(id) {
@@ -5913,6 +5928,116 @@ window.manualDistributePrizePool = async function(tourId) {
         alert("Dağıtım yapılamadı: " + e.message);
     }
 };
+// ============================================================================
+// ==================== LOBİ EŞLEŞME VE PLANLAMA BİLDİRİMLERİ =================
+// ============================================================================
 
+// 1. AÇIK KORT İLANI BİRİSİ TARAFINDAN KABUL EDİLDİĞİNDE ÇALIŞAN MOTOR
+window.sendWhatsAppOpenAdAcceptedNotification = async function(matchData) {
+    const WA_API_URL = "https://7107.api.greenapi.com"; 
+    const WA_INSTANCE_ID = "7107628348";                
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+    const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1';
+    const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
+    
+    let team1 = p1Name; if (matchData.oyuncu1PartnerID) team1 += ` & ${userMap[matchData.oyuncu1PartnerID]?.isim || ''}`;
+    let team2 = p2Name; if (matchData.oyuncu2PartnerID) team2 += ` & ${userMap[matchData.oyuncu2PartnerID]?.isim || ''}`;
+
+    const typeText = matchData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı Meydan Okuma (*${matchData.bahisPuani} Puan*)` : '🤝 Dostluk Maçı';
+
+    const messageText = 
+        `🤝 *KORT İLANI KABUL EDİLDİ!* 🤝\n\n` +
+        `🔥 Lobi arenasından güzel haber! Yayınlanan açık kort ilanı bir rakip tarafından kabul edildi ve eşleşme sağlandı.\n\n` +
+        `👤 *İlan Sahibi:* ${team1}\n` +
+        `👤 *Kabul Eden (Rakip):* ${team2}\n` +
+        `⚙️ *Maç Tipi:* ${typeText}\n` +
+        `👥 *Format:* ${matchData.macFormati || 'Tekler'}\n\n` +
+        `👉 _Şimdi sıra randevuyu netleştirmekte! Oyuncularımızın uygulamaya girerek en kısa sürede maç saati ve kort planlamasını yapması rica olunur._ 🎾`;
+
+    try {
+        await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+        });
+    } catch (error) { console.error("💥 Açık ilan kabul WhatsApp hatası:", error); }
+};
+
+// 2. ÖZEL MEYDAN OKUMA TEKLİFİ KABUL EDİLDİĞİNDE ÇALIŞAN MOTOR
+window.sendWhatsAppSpecificChallengeAcceptedNotification = async function(matchData) {
+    const WA_API_URL = "https://7107.api.greenapi.com"; 
+    const WA_INSTANCE_ID = "7107628348";                
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+    const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1';
+    const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
+    
+    let team1 = p1Name; if (matchData.oyuncu1PartnerID) team1 += ` & ${userMap[matchData.oyuncu1PartnerID]?.isim || ''}`;
+    let team2 = p2Name; if (matchData.oyuncu2PartnerID) team2 += ` & ${userMap[matchData.oyuncu2PartnerID]?.isim || ''}`;
+
+    const typeText = matchData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı Meydan Okuma (*${matchData.bahisPuani} Puan*)` : '🤝 Dostluk Maçı';
+
+    const messageText = 
+        `⚔️ *DÜELLO TEKLİFİ KABUL EDİLDİ!* ⚔️\n\n` +
+        `🔥 Kortlardaki büyük davet nihayet yanıt buldu! Gönderilen özel maç daveti rakip tarafından resmen kabul edildi.\n\n` +
+        `👤 *Meydan Okuyan:* ${team1}\n` +
+        `👤 *Meydan Okunan:* ${team2}\n` +
+        `⚙️ *Maç Tipi:* ${typeText}\n` +
+        `👥 *Format:* ${matchData.macFormati || 'Tekler'}\n\n` +
+        `👉 _Eşleşme tamamen kilitlendi! Oyuncularımızın en kısa sürede lobi üzerinden gün, saat ve kort seçimi yaparak planı kaydetmesi heyecanla bekleniyor!_ 🎾`;
+
+    try {
+        await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+        });
+    } catch (error) { console.error("💥 Özel meydan okuma kabul WhatsApp hatası:", error); }
+};
+
+// 3. MAÇIN TARİHİ VE KORTU GİRİLDİĞİNDE/PLANLANDIĞINDA ÇALIŞAN MOTOR
+window.sendWhatsAppMatchScheduledNotification = async function(matchData) {
+    const WA_API_URL = "https://7107.api.greenapi.com"; 
+    const WA_INSTANCE_ID = "7107628348";                
+    const WA_API_TOKEN = "fee80956785a47639c4bd62e63886be7c5c2ef330fc64dce9c"; 
+    const WA_RECIPIENT_CHAT_ID = "120363425128455544@g.us"; 
+
+    // Turnuva maç takvimi duyurularını engellemek için güvenlik kilidi
+    if (matchData.macTipi === 'Turnuva') return;
+
+    const p1Name = userMap[matchData.oyuncu1ID]?.isim || 'Oyuncu 1';
+    const p2Name = userMap[matchData.oyuncu2ID]?.isim || 'Oyuncu 2';
+    
+    let team1 = p1Name; if (matchData.oyuncu1PartnerID) team1 += ` & ${userMap[matchData.oyuncu1PartnerID]?.isim || ''}`;
+    let team2 = p2Name; if (matchData.oyuncu2PartnerID) team2 += ` & ${userMap[matchData.oyuncu2PartnerID]?.isim || ''}`;
+
+    let timeStr = 'Tarih Belirsiz';
+    if (matchData.macZamani) {
+        timeStr = matchData.macZamani.toDate().toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    }
+
+    const typeText = matchData.macTipi === 'Meydan Okuma' ? `🏆 Puanlı (*${matchData.bahisPuani} P*)` : '🤝 Dostluk';
+    const courtType = matchData.kortTipi || 'Belirtilmedi';
+
+    const messageText = 
+        `📅 *MÜSABAKA REZERVASYONU YAPILDI!* 📅\n\n` +
+        `🎾 Kortlar alev almaya hazır! Eşleşmesi tamamlanan lobi mücadelesinin resmi gün, saat ve konum bilgileri sisteme girildi.\n\n` +
+        `⚔️ *Karşılaşma:* ${team1}  *VS*  ${team2}\n` +
+        `⚙️ *Tür:* ${typeText} (${matchData.macFormati || 'Tekler'})\n` +
+        `📍 *Kort:* ${matchData.macYeri || 'Belirsiz'} (_Zemin: ${courtType}_)\n` +
+        `⏰ *Zaman:* ${timeStr}\n\n` +
+        `👉 _Geri sayım başladı! Her iki tarafa da fair-play ruhuyla dolu, sakatlıksız ve bol heyecanlı bir müsabaka dileriz!_ 🚀🔥`;
+
+    try {
+        await fetch(`${WA_API_URL}/waInstance${WA_INSTANCE_ID}/sendMessage/${WA_API_TOKEN}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId: WA_RECIPIENT_CHAT_ID, message: messageText })
+        });
+    } catch (error) { console.error("💥 Maç takvim planı WhatsApp hatası:", error); }
+};
 
 }); // DOMContentLoaded SONU
