@@ -2,945 +2,175 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Tenis Ligi</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#c06035"> 
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    
-    <script src="https://js.pusher.com/beams/1.0/push-notifications-cdn.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkorApp - Pro</title>
+    <link rel="stylesheet" href="style.css?v=3.2">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-
-    <div id="auth-screen">
-        <div class="auth-wrapper">
-            <div class="logo-area">
-                <img src="logo.png" alt="Tenis Ligi Logo" style="width: 100px; height: auto; margin-bottom: 10px;">
-                <h2>Tenis Ligi</h2>
-                <p style="color: #eee; font-size: 0.9em;">Kortlara hoş geldin!</p>
-            </div>
-
-            <div class="auth-card">
-                <div class="auth-tabs">
-                    <div class="auth-tab active" id="tab-login-switch">Giriş Yap</div>
-                    <div class="auth-tab" id="tab-register-switch">Kayıt Ol</div>
-                </div>
-
-                <div class="auth-form-container">
-                    <p id="auth-error" style="display:none;"></p>
-
-                    <div id="register-fields" style="display: none;">
-                        <div class="profile-upload-container">
-                            <img id="profile-preview" src="logo.png" alt="Profil">
-                            <label for="profile-photo" class="upload-label">+ Fotoğraf Seç</label>
-                            <input type="file" id="profile-photo" accept="image/*" style="display:none;">
-                        </div>
-
-                        <div class="input-group">
-                            <span class="input-icon">👤</span>
-                            <input type="text" id="full-name" placeholder="Ad Soyad">
-                        </div>
-                        <div class="input-group">
-                            <span class="input-icon">🚻</span>
-                            <select id="register-gender" style="margin-bottom:0;">
-                                <option value="" disabled selected>Cinsiyetiniz</option>
-                                <option value="Erkek">Erkek</option>
-                                <option value="Kadın">Kadın</option>
-                            </select>
-                        </div>
-
-                        <div class="input-group">
-                            <span class="input-icon">📅</span>
-                            <div style="flex:1;">
-                                <label style="font-size:0.75em; color:#666; margin-left:45px; margin-bottom:2px; display:block;">Tenise Başlangıç Tarihi</label>
-                                <input type="month" id="register-start-date" style="margin-top:0;">
-                            </div>
-                        </div>
-
-                        <div class="input-group">
-                            <span class="input-icon">🏟️</span>
-                            <select id="register-club" style="margin-bottom:0;">
-                                <option value="" disabled selected>Oynadığınız Kulüp Seçin</option>
-                            </select>
-                        </div>
+    <div class="container">
+        <h1>🏆 SkorApp Pro</h1>
+        <p id="app-sub-title">Gelişmiş Ekip ve Turnuva Sistemi</p>
+        
+        <div id="app-content">
+            <div id="auth-screen">
+                <h2 id="auth-title">Giriş Yap</h2>
+                <div class="form-group">
+                    <input type="text" id="auth-username" placeholder="Kullanıcı Adı (Sadece Kayıtta)" style="display: none;">
+                    <input type="email" id="auth-email" placeholder="E-posta Adresi">
+                    <input type="password" id="auth-password" placeholder="Şifre">
+                    
+                    <div id="register-extra-fields" style="display: none; text-align: left; margin-top: 10px;">
+                        <label style="font-weight: bold; font-size: 13px; color: #2c4d61;">Profil Avatarı (Emoji):</label>
+                        <input type="text" id="auth-avatar" placeholder="Örn: 😎, 👑, 🎲" value="👤">
                         
-                        <div class="input-group">
-                            <span class="input-icon">🏟️</span>
-                            <select id="court-preference" style="margin-bottom:0;">
-                                <option value="" disabled selected>Favori Kort Tipi</option>
-                                <option value="Toprak">Toprak 🧱</option>
-                                <option value="Sert">Sert 🟦</option>
-                                
-                                <option value="Her İkisi">Farketmez 🤷‍♂️</option>
-                            </select>
-                        </div>
+                        <label style="font-weight: bold; font-size: 13px; color: #2c4d61; display: block; margin-top: 10px;">En Sevdiğin Oyunlar:</label>
+                        <input type="text" id="auth-fav-games" placeholder="Örn: 101, Batak, Okey">
                     </div>
-                    
-                    <div class="input-group">
-                        <span class="input-icon">✉️</span>
-                        <input type="email" id="email" placeholder="E-posta Adresi">
-                    </div>
-
-                    <div class="input-group">
-                        <span class="input-icon">🔒</span>
-                        <input type="password" id="password" placeholder="Şifre">
-                    </div>
-                    
-                    <button id="auth-action-btn" class="btn-main">Giriş Yap</button>
-                    
-                    <div id="login-footer-links" style="margin-top: 15px; text-align: center;">
-                        <span id="forgot-password-link" style="color:#666; font-size:0.85em; cursor:pointer; text-decoration: underline;">Şifremi Unuttum?</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="main-app" style="display: none;">
-        
-        <div class="header-container">
-            <h1>🎾 Tenis Ligi</h1>
-        </div>
-
-        <div id="tab-lobby" class="tab-section active-section">
-            <h3>Lobi 🏠</h3>
-            <div id="lobby-actions-card" class="lobby-card" style="background: #fff3e0; border-left: 4px solid #ff9800; display: none;">
-    <h4 style="color:#e65100; margin-bottom:10px;">⚠️ Eylem Gerektirenler</h4>
-    <div id="lobby-actions-container" class="lobby-scroll-list" style="max-height: 200px; padding: 5px; background:transparent; border:none; box-shadow:none;">
-        </div>
-
-</div>
-        <div id="email-spam-alert" class="warning-banner" style="display: flex; background: #e8f5e9; border-left: 4px solid #25d366; cursor: pointer;" onclick="window.open('https://chat.whatsapp.com/I32caxuZlNf25hD5voxgoo', '_blank')">
-    <div class="warning-icon">💬</div>
-    <div class="warning-content" style="flex: 1;">
-        <strong style="color: #128c7e;">Resmi WhatsApp Grubumuz! 🟢</strong>
-        <p style="color: #2c3e50; font-size: 0.85em; margin-top: 2px; line-height: 1.3;">Lig fikstürünü, anlık skorları ve günlük maç programlarını kaçırmamak için hemen resmi topluluk grubumuza katılın!</p>
-    </div>
-    <button id="btn-close-spam-alert" class="warning-close" style="color: #999; font-size: 20px;">&times;</button>
-</div>
-
-            <div id="profile-incomplete-alert" class="warning-banner info-banner" style="display: none;">
-                <div class="warning-icon">👤</div>
-                <div class="warning-content">
-                    <strong>Profilin Çok Sessiz Görünüyor!</strong>
-                    <p>Diğer oyuncuların seni tanıması için fotoğrafını yükle ve bilgilerini tamamla.</p>
-                    <button id="btn-fix-profile" style="background:#0d47a1; color:white; padding:5px 10px; font-size:0.8em; margin-top:5px; width:auto; border-radius:15px;">Hemen Düzenle ✏️</button>
-                </div>
-                <button id="btn-close-profile-alert" class="warning-close">&times;</button>
-            </div>
-            
-            <div id="weather-widget" class="lobby-card" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); color: white; border:none; display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <h4 style="color:white; margin:0; border:none; font-size:1.1em; text-shadow:0 1px 2px rgba(0,0,0,0.1);">🌤️ Bursa Kort Havası</h4>
-                        <div id="weather-desc" style="font-size:0.9em; opacity:0.95; margin-top:2px;">Yükleniyor...</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div id="weather-temp" style="font-size:1.8em; font-weight:bold; text-shadow:0 1px 3px rgba(0,0,0,0.2);">--°C</div>
-                        <div id="weather-wind" style="font-size:0.8em; opacity:0.9;">💨 -- km/s</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="lobby-card" style="background: linear-gradient(to right, #ffffff, #f8f9fa); border-left: 4px solid #6f42c1;">
-                <h4 style="color:#6f42c1;">📢 Ligden Haberler & Dedikodular</h4>
-                <p style="font-size:0.8em; color:#888; margin-bottom:10px;">Yapay zeka ligi izliyor ve yorumluyor... 🤖</p>
-                <div id="lobby-announcements-container" class="lobby-scroll-list" style="max-height: 350px;">
-                    <p style="text-align:center; color:#777;">Haberler yükleniyor...</p>
-                </div>
-            </div>
-
-<div class="lobby-card" style="background: #fff; border-left: 4px solid #0056b3; padding: 15px;">
-    <h4 style="color:#0056b3; margin-bottom:15px;">🏆 Turnuvalar & Takvim</h4>
-    <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
-        
-        <a href="https://www.ikort.com.tr/turnuvalar" target="_blank" style="text-decoration:none; color:inherit; min-width: 85px;">
-            <div style="height: 60px; background: #e3f2fd; border-radius: 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #bbdefb; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <span style="font-size: 1.1em; font-weight:bold; color:#0d47a1;">i-KORT</span>
-                <span style="font-size: 0.65em; font-weight:bold; color:#0d47a1; margin-top:2px;">TAKVİMİ</span>
-            </div>
-        </a>
-
-        <a href="https://www.atptour.com" target="_blank" style="text-decoration:none; color:inherit; min-width: 85px;">
-            <div style="height: 60px; background: #002865; border-radius: 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #001f4d; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <span style="font-size: 1.1em; color:#fff;">ATP</span>
-                <span style="font-size: 0.65em; font-weight:bold; color:#00aaff; margin-top:2px;">TOUR</span>
-            </div>
-        </a>
-
-        <a href="https://www.wtatennis.com" target="_blank" style="text-decoration:none; color:inherit; min-width: 85px;">
-            <div style="height: 60px; background: #5c068c; border-radius: 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #4a0570; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <span style="font-size: 1.1em; color:#fff;">WTA</span>
-                <span style="font-size: 0.65em; font-weight:bold; color:#e040fb; margin-top:2px;">TOUR</span>
-            </div>
-        </a>
-
-        <a href="https://www.itftennis.com/en/tournament-calendar/mens-world-tennis-tour-calendar/" target="_blank" style="text-decoration:none; color:inherit; min-width: 85px;">
-            <div style="height: 60px; background: #009e49; border-radius: 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #00803b; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <span style="font-size: 1.1em; color:#fff;">ITF</span>
-                <span style="font-size: 0.65em; font-weight:bold; color:#ccff90; margin-top:2px;">ERKEK</span>
-            </div>
-        </a>
-
-        <a href="https://www.itftennis.com/en/tournament-calendar/womens-world-tennis-tour-calendar/" target="_blank" style="text-decoration:none; color:inherit; min-width: 85px;">
-            <div style="height: 60px; background: #009e49; border-radius: 12px; display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px solid #00803b; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <span style="font-size: 1.1em; color:#fff;">ITF</span>
-                <span style="font-size: 0.65em; font-weight:bold; color:#ccff90; margin-top:2px;">KADIN</span>
-            </div>
-        </a>
-
-    </div>
-</div>
-
-            <div style="margin-top: 20px; display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
-                <h4 style="margin:0; color: #2c3e50; border:none; padding:0;">📢 Açık Maç İlanları</h4>
-                <span style="font-size:0.7em; color:#777;">(Kaydır ↕)</span>
-            </div>
-            <div id="lobby-requests-container" class="lobby-scroll-list">
-                <p style="text-align:center; color:#777; padding:10px;">İlanlar yükleniyor...</p>
-            </div>
-
-            <div style="margin-top: 20px; display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
-                <h4 style="margin:0; color: #2c3e50; border:none; padding:0;">📅 Yaklaşan Maçlar</h4>
-                <span style="font-size:0.7em; color:#777;">(Kaydır ↕)</span>
-            </div>
-            <div id="lobby-scheduled-container" class="lobby-scroll-list">
-                <p style="text-align:center; color:#777; padding:10px;">Maçlar yükleniyor...</p>
-            </div>
-        </div>
-                <div id="tab-tournaments" class="tab-section" style="display: none;">
-    <div class="header-container" style="margin-bottom: 15px; border-bottom: none;">
-        <h2 style="margin:0; text-align:left;">Turnuvalar 🏆</h2>
-    </div>
-
-    <div id="admin-tournament-controls" style="display: none; margin-bottom: 15px;">
-        <button id="btn-show-create-tournament" class="btn-main" style="background-color: #28a745;">+ Yeni Turnuva Oluştur</button>
-    </div>
-
-    <div id="tournament-list-view">
-        <div id="active-tournaments-container">
-            <p style="text-align:center; color:#777;">Aktif turnuva bulunmuyor.</p>
-        </div>
-    </div>
-
-    <div id="create-tournament-form" class="modern-form-container" style="display: none;">
-        <div class="form-header-row">
-            <button class="btn-back-small" onclick="document.getElementById('create-tournament-form').style.display='none'; document.getElementById('tournament-list-view').style.display='block';">⬅ Geri</button>
-            <h4>Yeni Turnuva Aç</h4>
-        </div>
-        <label class="input-label">Turnuva Adı</label>
-        <input type="text" id="tour-name" placeholder="Örn: Bursa Bahar Kupası">
-        
-<label class="input-label">Turnuva İlerleyiş Sistemi</label>
-        <select id="tour-system">
-            <option value="group_knockout">Grup Aşaması + Eleme</option>
-            <option value="knockout">Direkt Eleme (Kupa)</option>
-            <option value="league">Lig Usulü (Puan Tablolu)</option>
-        </select>
-
-        <div id="league-options" style="display:none; background:#e3f2fd; padding:15px; border-radius:8px; margin-bottom:10px; border:1px solid #bbdefb;">
-            <label class="input-label" style="margin-top:0; color:#0d47a1;">Lig Formatı</label>
-            <select id="tour-league-duration">
-                <option value="all_play_all">Herkes Birbiriyle Oynasın (Tam Lig)</option>
-                <option value="custom_weeks">Belirli Bir Hafta Sayısı Oynansın</option>
-            </select>
-
-            <div id="league-custom-weeks-container" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0; color:#0d47a1;">Kaç Hafta Sürecek?</label>
-                <input type="number" id="tour-league-weeks" value="4" min="1">
-            </div>
-
-            <div id="league-team-type-container" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0; color:#0d47a1;">Takım Yapısı</label>
-                <select id="tour-league-team-type">
-                    <option value="fixed">Takımlar Bir Kere Kurulsun ve Sabit Kalsın</option>
-                    <option value="changing">Takımlar Her Hafta Yeniden Karıştırılsın (Mix-in)</option>
-                </select>
-            </div>
-
-            <div id="league-standings-container" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0; color:#0d47a1;">Puan Tablosu Türü</label>
-                <select id="tour-standings-type">
-                    <option value="team">Takım Bazlı Sıralama</option>
-                    <option value="individual">Kişi Bazlı Sıralama</option>
-                </select>
-            </div>
-        </div>
-
-        <label class="input-label">Format</label>
-        <select id="tour-format">
-            <option value="Tekler Karışık">Tekler Karışık</option>
-            <option value="Tekler Erkek">Tekler Erkek</option>
-            <option value="Tekler Kadın">Tekler Kadın</option>
-            <option value="Mix">Mix</option>
-            <option value="Double Erkek">Double Erkek</option>
-            <option value="Double Kadın">Double Kadın</option>
-        </select>
-
-        <div id="doubles-options" style="display:none; background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ddd;">
-            <label class="input-label" style="margin-top:0;">Çiftler Kayıt Tipi</label>
-            <select id="tour-reg-type">
-                <option value="manual">Takım Kaydı (Oyuncular Partnerini Kendi Seçer)</option>
-                <option value="auto">Bireysel Kayıt (Sistem Takımları Kendi Kurar)</option>
-                <option value="hybrid">Hem Takım Hem Bireysel (Serbest Kayıt) </option>
-            </select>
-            
-            <div id="auto-options" style="display:none; margin-top:10px;">
-                <label class="input-label" style="margin-top:0;">Otomatik Eşleşme Mantığı</label>
-                <select id="tour-auto-type">
-                    <option value="balanced">Puanlara Göre Denk Takımlar (Sıralı)</option>
-                    <option value="random">Gelişigüzel (Kura İle)</option>
-                </select>
-            </div>
-        </div>
-<label class="input-label">Grup Puanlama Sistemi</label>
-        <select id="tour-points-system">
-            <option value="winRate">Oyun Kazanma Oranı (%)</option>
-            <option value="threePoint">3 Puanlı Sistem (G=3, M=1)</option>
-        </select>
-        <label class="input-label">Giriş Ücreti / Bahis Puanı</label>
-        <input type="number" id="tour-fee" placeholder="Örn: 100" min="0">
-
-        <label class="input-label">Son Kayıt Tarihi</label>
-        <input type="datetime-local" id="tour-deadline">
-<div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px; display:flex; align-items:center; gap:10px; border: 1px dashed #25d366;">
-            <input type="checkbox" id="tour-send-whatsapp" style="width:18px; height:18px;" checked>
-            <label for="tour-send-whatsapp" style="margin:0; font-weight:600; color:#333; font-size:0.9em;">WhatsApp Grubuna Bildirim Gitsin mi? 🟢</label>
-        </div>
-        <button id="btn-save-tournament" class="btn-save" style="margin-top: 15px;">Turnuvayı Başlat 🚀</button>
-    </div>
-
-    <div id="tournament-detail-view" style="display: none;">
-        <div class="form-header-row">
-            <button class="btn-back-small" onclick="document.getElementById('tournament-detail-view').style.display='none'; document.getElementById('tournament-list-view').style.display='block';">⬅ Listeye Dön</button>
-            <h4 id="detail-tour-name">Turnuva Detayı</h4>
-        </div>
-        
-        <div id="tour-registration-area" class="modern-stat-card" style="margin-bottom: 15px;">
-            </div>
-
-        <div id="tour-admin-manage-area" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffeeba;">
-            </div>
-
-        <h4 style="margin-top: 20px;">Eşleşmeler & Fikstür</h4>
-        <div id="tour-bracket-container" class="custom-bracket-container">
-            <p style="text-align:center; color:#777; width: 100%;">Eşleşmeler henüz belli değil.</p>
-        </div>
-    </div>
-</div>
-
-        <div id="tab-rankings" class="tab-section" style="display: none;">
-            <h3>Lig Sıralaması 🏆</h3>
-            
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <button id="btn-rank-singles" class="btn-main" style="margin:0; background:#c06035;">Tekler Ligi 👤</button>
-                <button id="btn-rank-doubles" class="btn-main" style="margin:0; background:#6c757d;">Çiftler Ligi 👥</button>
-            </div>
-        <div style="background-color: #f1f3f5; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef; position: sticky; top: 0; z-index: 10;">
-    <select id="leaderboard-gender-filter" style="margin-bottom:0; width: 100%;">
-        <option value="all">Kadınlar/Erkekler Sıralaması 🚻</option>
-        <option value="Erkek">Erkekler ♂️</option>
-        <option value="Kadın">Kadınlar ♀️</option>
-    </select>
-</div>
-            <div id="leaderboard"></div>
-        </div>
-
-        <div id="tab-bests" class="tab-section" style="display: none;">
-            <h3>Ligin En'leri 🌟</h3>
-            <div style="background-color: #f1f3f5; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef; text-align: center;">
-                <select id="bests-filter-select" style="margin-bottom:0; width: auto; display: inline-block;">
-                    <option value="all">Tüm Zamanlar ♾️</option>
-                    <option value="month">Bu Ay 📅</option>
-                </select>
-            </div>
-            <div id="bests-container" class="bests-grid">
-                <p style="text-align:center; width:100%; color:#777;">Veriler analiz ediliyor...</p>
-            </div>
-        </div>
-
-        <div id="tab-challenge" class="tab-section" style="display: none;">
-            <h3>Meydan Oku ⚔️</h3>
-            <div class="challenge-center-wrapper">
-                <div id="challenge-menu-area" class="challenge-menu-grid">
-                    <div class="action-card action-card-green" id="btn-show-create-ad">
-                        <div class="action-icon">📢</div>
-                        <div class="action-content">
-                            <h4>Herkese Açık İlan</h4>
-                            <p>Ligdeki herkes görebilir, kendine güvenen kabul eder.</p>
-                        </div>
-                        <div class="action-arrow">➝</div>
-                    </div>
-                    <div class="action-card action-card-red" id="btn-show-specific-challenge">
-                        <div class="action-icon">🎯</div>
-                        <div class="action-content">
-                            <h4>Özel Meydan Okuma</h4>
-                            <p>Doğrudan listeden rakip seç ve teklif gönder.</p>
-                        </div>
-                        <div class="action-arrow">➝</div>
-                    </div>
-                </div>
-
-                <div id="create-ad-form" class="modern-form-container" style="display:none;">
-                    <div class="form-header-row">
-                        <button class="btn-back-small" onclick="returnToChallengeMenu()">⬅ Geri</button>
-                        <h4>📢 İlan Oluştur</h4>
-                    </div>
-                    <p class="form-hint">Bu talebi ligdeki herkes görebilir.</p>
-                    <label class="input-label">Maç Formatı</label>
-                    <select id="ad-match-format">
-                        <option value="Tekler">Tekler (1v1) 👤</option>
-                        <option value="Çiftler">Çiftler (2v2) 👥</option>
-                    </select>
-                    
-                    <div id="ad-partner-container" style="display:none; background: #f0f8ff; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                        <label class="input-label" style="margin-top:0;">Takım Arkadaşın (Partnerin)</label>
-                        <select id="ad-partner-select"><option value="">Partner Seçin</option></select>
-                    </div>                    
-                    <label class="input-label">Maç Tipi</label>
-                    <select id="ad-match-type">
-                        <option value="Dostluk">Dostluk Maçı 🤝</option>
-                        <option value="Meydan Okuma">Puanlı Meydan Okuma 🏆</option>
-                    </select>
-                    <div class="league-selector-container">
-                        <label class="input-label">Kimler Kabul Edebilir?</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-label league-bronze-text"><input type="checkbox" name="allowed-leagues" value="Bronz" checked> Bronz</label>
-                            <label class="checkbox-label league-silver-text"><input type="checkbox" name="allowed-leagues" value="Gümüş" checked> Gümüş</label>
-                            <label class="checkbox-label league-gold-text"><input type="checkbox" name="allowed-leagues" value="Altın" checked> Altın</label>
-                        </div>
-                    </div>
-                    <input type="number" id="ad-wager-points" placeholder="Bahis Puanı (Min 50)" min="50" style="display:none;">
-                    <button id="submit-ad-btn" class="btn-save">İlanı Yayınla 🚀</button>
-                </div>
-
-                <div id="challenge-form" class="modern-form-container" style="display:none;">
-                    <div class="form-header-row">
-                        <button class="btn-back-small" onclick="returnToChallengeMenu()">⬅ Geri</button>
-                        <h4>⚔️ Özel Teklif</h4>
-                    </div>
-                    <label class="input-label">Maç Formatı</label>
-                    <select id="challenge-match-format">
-                        <option value="Tekler">Tekler (1v1) 👤</option>
-                        <option value="Çiftler">Çiftler (2v2) 👥</option>
-                    </select>
-                    
-                    <div id="challenge-partner-container" style="display:none; background: #f0f8ff; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                        <label class="input-label" style="margin-top:0;">Takım Arkadaşın (Partnerin)</label>
-                        <select id="challenge-partner-select"><option value="">Partner Seçin</option></select>
-                    </div>
-                    <label class="input-label">Rakip Seç (Rakip Kaptan)</label>
-                    <select id="opponent-select"><option value="">Yükleniyor...</option></select>                   
-                    
-                    <label class="input-label">Maç Tipi</label>
-                    <select id="match-type-select">
-                        <option value="Dostluk">Dostluk Maçı 🤝</option>
-                        <option value="Meydan Okuma">Puanlı Meydan Okuma 🏆</option>
-                    </select>
-                    <input type="number" id="wager-points" placeholder="Bahis Puanı (Min 50)" min="50" style="display:none;">
-                    <button id="submit-challenge-btn" class="btn-save" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">Teklifi Gönder 🔥</button>
-                    <p id="challenge-message"></p>
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-fixture" class="tab-section" style="display: none;">
-            <h3>Lig Fikstürü 📅</h3>
-            <div id="program-content" style="display:block;">
-                <div class="section-container active-matches-section" style="border-left: 5px solid #28a745;">
-                    <h4 class="section-title" style="color:#28a745;">🔥 Oynanıyor & Planlananlar</h4>
-                    <div id="fixture-active-container"><p style="text-align:center; color:#777;">Yükleniyor...</p></div>
-                </div>
-                <div class="section-container pending-matches-section" style="border-left: 5px solid #ffc107;">
-                    <h4 class="section-title" style="color:#ffc107;">⏳ Bekleyen Teklifler</h4>
-                    <div id="fixture-pending-container"><p style="text-align:center; color:#777;">Veri yok.</p></div>
-                </div>
-                <div class="section-container history-matches-section" style="border-left: 5px solid #6c757d;">
-                    <h4 class="section-title" style="color:#6c757d;">📜 Tamamlanan Maçlar (Geçmiş)</h4>
-                    <div id="filters-container" style="background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef;">
-                        <div class="filter-row">
-                            <input type="date" id="filter-date-start" placeholder="Başlangıç">
-                            <input type="date" id="filter-date-end" placeholder="Bitiş">
-                        </div>
-                        <div class="filter-row">
-                            <select id="filter-court"><option value="">Tüm Kortlar</option></select>
-                            <select id="filter-player"><option value="">Tüm Oyuncular</option></select>
-                        </div>
-                        <div class="filter-actions">
-                            <button id="apply-filters-btn" class="btn-filter-apply">Geçmişi Filtrele 🔍</button>
-                            <button id="clear-filters-btn" class="btn-filter-clear">Temizle ❌</button>
-                        </div>
-                    </div>
-                    <div id="fixture-history-container"><p style="text-align:center; color:#777;">Veri yok.</p></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-matches" class="tab-section" style="display: none;">
-            <div class="header-container" style="margin-bottom: 15px; border-bottom: none;">
-                <h2 style="margin:0; text-align:left;">Maç Akışı 🎾</h2>
-            </div>
-            
-            <div class="section-container active-matches-section">
-                <h4 class="section-title" style="color:#28a745;">🔥 Aktif & Planlananlar</h4>
-                <div id="my-active-matches-container"></div>
-            </div>
-
-            <div class="section-container pending-matches-section">
-                <h4 class="section-title" style="color:#ffc107;">⏳ Bekleyen Teklifler</h4>
-                <div id="my-pending-matches-container"></div>
-            </div>
-
-            <div class="section-container history-matches-section">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h4 class="section-title" style="color:#6c757d; margin-bottom:0;">📜 Maç Geçmişi</h4>
-                </div>
-                <div class="history-filters-box" style="margin-top:10px;">
-                    <div style="display:flex; gap:5px; margin-bottom:5px;">
-                        <input type="date" id="hist-filter-start" style="padding:8px; font-size:0.9em;">
-                        <input type="date" id="hist-filter-end" style="padding:8px; font-size:0.9em;">
-                    </div>
-                    <div style="display:flex; gap:5px;">
-                        <input type="text" id="hist-filter-player-name" placeholder="Oyuncu Adı..." style="flex:1; padding:8px; font-size:0.9em;">
-                        <select id="hist-filter-court" style="flex:1; padding:8px; font-size:0.9em; height:auto;">
-                            <option value="">Tüm Kortlar</option>
-                        </select>
-                    </div>
-                    <button id="btn-apply-history-filter" class="btn-purple" style="width:100%; padding:8px; margin-top:5px; font-size:0.9em;">Filtrele 🔍</button>
-                </div>
-                <div id="my-history-matches-container"></div>
-            </div>
-            </div>
-        
-        <div id="tab-stats" class="tab-section" style="display: none;">
-            <h3>İstatistik Merkezi 📊</h3>
-            
-            <div style="margin-bottom:20px;">
-                <select id="stats-view-player-select" style="width:100%; padding:15px; border-radius:12px; border:1px solid #ddd; font-weight:bold;">
-                    <option value="me">👤 Benim İstatistiklerim</option>
-                </select>
-            </div>
-
-            <div id="stats-content-area">
-<div class="modern-stat-card" style="display: flex; gap: 10px; justify-content: space-around; padding: 15px;">
-   <div style="text-align:center;">
-        <div style="font-size:1.8em;">👤</div>
-        <div id="stat-total-points" style="font-size:1.4em; font-weight:800; color:#e65100;">0</div>
-        <div style="font-size:0.75em; color:#777; font-weight:600;">TEKLER P.</div>
-    </div>
-    <div style="width:1px; background:#eee;"></div>
-    <div style="text-align:center;">
-        <div style="font-size:1.8em;">👥</div>
-        <div id="stat-doubles-points" style="font-size:1.4em; font-weight:800; color:#6f42c1;">0</div>
-        <div style="font-size:0.75em; color:#777; font-weight:600;">ÇİFTLER P.</div>
-    </div>
-    <div style="width:1px; background:#eee;"></div>
-    <div style="text-align:center;">
-        <div style="font-size:1.8em;">🎾</div>
-        <div id="stat-total-match" style="font-size:1.4em; font-weight:800; color:#0d47a1;">0</div>
-        <div style="font-size:0.75em; color:#777; font-weight:600;">TOPLAM MAÇ</div>
-    </div>
-    <div style="width:1px; background:#eee;"></div>
-    <div style="text-align:center;">
-        <div style="font-size:1.8em;">🏆</div>
-        <div id="stat-total-win" style="font-size:1.4em; font-weight:800; color:#28a745;">0</div>
-        <div style="font-size:0.75em; color:#777; font-weight:600;">GALİBİYET</div>
-    </div>
-</div>
-
-                <div class="modern-stat-card">
-                    <h4 style="margin-top:0;">Performans Oranları</h4>
-                    <div class="stats-grid-charts">
-                        <div class="chart-box">
-                            <div class="chart-circle" id="chart-win-rate" style="--p:0; --c:#28a745;"><span>0%</span></div>
-                            <label>Maç</label>
-                        </div>
-                        <div class="chart-box">
-                            <div class="chart-circle" id="chart-set-rate" style="--p:0; --c:#007bff;"><span>0%</span></div>
-                            <label>Set</label>
-                        </div>
-                        <div class="chart-box">
-                            <div class="chart-circle" id="chart-game-rate" style="--p:0; --c:#ffc107;"><span>0%</span></div>
-                            <label>Oyun</label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modern-stat-card" style="text-align:left;">
-                    <h4 style="margin-top:0; text-align:center;">Son Form & Kortlar</h4>
-                    <div style="display:flex; justify-content:center; gap:5px; margin-bottom:20px;" id="stat-form-badges"></div>
-                    <div style="font-size:0.85em; color:#666; margin-bottom:10px;">Kort Bazlı Galibiyet:</div>
-                    <div class="bar-chart-row">
-                        <span class="bar-label">Toprak</span>
-                        <div class="bar-track"><div class="bar-fill" id="bar-clay" style="width: 0%; background:#c06035;"></div></div>
-                        <span class="bar-val" id="val-clay">0%</span>
-                    </div>
-                    <div class="bar-chart-row">
-                        <span class="bar-label">Sert</span>
-                        <div class="bar-track"><div class="bar-fill" id="bar-hard" style="width: 0%; background:#0d47a1;"></div></div>
-                        <span class="bar-val" id="val-hard">0%</span>
-                    </div>
-                    
-                </div>
-            </div>
-        </div>
-
-        <div id="tab-gallery" class="tab-section" style="display: none;">
-            <h3>Kortlardan Kareler 📸</h3>
-            <div id="gallery-filters" style="background-color: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e9ecef;">
-                <div class="filter-row">
-                    <input type="date" id="gallery-filter-date" placeholder="Tarih">
-                </div>
-                <div class="filter-row">
-                    <select id="gallery-filter-court"><option value="">Tüm Kortlar</option></select>
-                    <select id="gallery-filter-player"><option value="">Tüm Oyuncular</option></select>
-                </div>
-                <div class="filter-actions">
-                    <button id="btn-gallery-filter" class="btn-filter-apply">Filtrele 🔍</button>
-                    <button id="btn-gallery-clear" class="btn-filter-clear">Temizle ❌</button>
-                </div>
-            </div>
-            <div id="gallery-grid" class="gallery-grid">
-                <p style="text-align:center; width:200%; color:#777;">Yükleniyor...</p>
-            </div>
-        </div>
-
-        <div id="tab-chat" class="tab-section" style="display: none;">
-            <h3>Mesajlar 💬</h3>
-            <div id="my-chats-section" style="display: block; margin-top: 15px;">
-                <div id="chat-list-container">
-                    <p style="text-align:center; color:#777;">Sohbetler yükleniyor...</p>
-                </div>
-            </div>
-        </div>
-
-<div id="tab-profile" class="tab-section" style="display: none;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0; border:none; padding:0;">Profilim 👤</h3>
-                <button id="logout-btn-profile" style="width:auto; padding:8px 15px; background-color:#dc3545; font-size:0.85em;">Çıkış Yap 🚪</button>
-            </div>
-
-            <div class="profile-header-card">
-                <div class="profile-upload-container">
-                    <img id="edit-profile-preview" src="logo.png" class="profile-preview-large" style="width:100px; height:100px; border:3px solid #f0f0f0;">
-                    <label for="edit-profile-photo" class="upload-label-blue" style="margin-top:10px; display:inline-block; background:#e3f2fd; padding:5px 15px; border-radius:20px; font-weight:600;">📷 Fotoğrafı Değiştir</label>
-                    <input type="file" id="edit-profile-photo" accept="image/*" style="display:none;">
                 </div>
                 
-                <div style="margin-top: 15px;">
-                    <h4 style="color:#555; border:none; margin-bottom:10px; font-size:0.9em;">KAZANILAN ROZETLER</h4>
-                    <div id="my-badges-container" class="badges-container" style="justify-content:center;"></div>
-                </div>
-            </div>
-
-            <div class="modern-stat-card" style="text-align:left;">
-                <h4 style="margin-top:0; margin-bottom:20px;">Bilgilerini Düzenle</h4>
-                <label class="input-label">Ad Soyad</label>
-                <input type="text" id="edit-full-name">
-                <label class="input-label">Cinsiyet</label>
-                <select id="edit-gender">
-                    <option value="Erkek">Erkek</option>
-                    <option value="Kadın">Kadın</option>
-                </select>
-                <label class="input-label">Tenise Başlangıç</label>
-                <input type="month" id="edit-start-date">
-                <label class="input-label">Kulüp</label>
-                <select id="edit-club"><option value="">Seçiniz</option></select>
-                <label class="input-label">Favori Kort</label>
-                <select id="edit-court-preference">
-                    <option value="Toprak">Toprak</option>
-                    <option value="Sert">Sert</option>
-                    <option value="Çim">Çim</option>
-                    <option value="Her İkisi">Farketmez</option>
-                </select>
-                <label class="input-label">Uygulama İçi Bildirim</label>
-                <select id="edit-notification-preference">
-                    <option value="ses">Sesli 🔊</option>
-                    <option value="titresim">Titreşim 📳</option>
-                    <option value="sessiz">Sessiz 🔕</option>
-                </select>
-                <div style="margin-top:15px; padding:15px; background:#f8f9fa; border-radius:12px; display:flex; align-items:center; gap:10px;">
-                    <input type="checkbox" id="edit-email-notify" style="width:20px; height:20px;">
-                    <label for="edit-email-notify" style="margin:0; font-weight:600; color:#333;">E-posta bildirimlerini aç 📧</label>
-                </div>
-
-                <button id="btn-enable-push" class="btn-main" style="width:100%; margin-top:15px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);">
-                    🔔 Telefona Bildirim Gönder
+                <button id="auth-primary-btn" class="btn-primary">Giriş Yap</button>
+                
+                <button id="google-auth-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; background: #ffffff; color: #4285F4; border-color: #4285F4; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <span style="font-weight: bold; font-size: 18px;">G</span> Google ile Giriş Yap
                 </button>
-
-                <button id="save-profile-btn" class="btn-save-profile" style="width:100%; margin-top:20px;">Kaydet ve Güncelle ✅</button>
+                
+                <button id="forgot-password-btn" class="btn-secondary" style="margin-top: 10px; font-size: 12px; padding: 5px; border: none; color: #7f8c8d;">Şifremi Unuttum</button>
+                
+                <hr style="margin: 15px 0; border: 0; border-top: 1px solid #dee2e6;">
+                
+                <button id="toggle-auth-btn" style="background: none; border: none; color: #1c7b64; font-weight: bold; cursor: pointer;">Hesabın yok mu? Kayıt Ol</button>
+                <button id="quick-start-btn" class="btn-secondary" style="width: 100%; margin-top: 10px; border-color: #7f8c8d; color: #7f8c8d;">Giriş Yapmadan Hızlı Başla</button>
             </div>
 
-            <div class="modern-stat-card" style="padding:15px;">
-                <h4 style="margin-top:0; border:none; margin-bottom:10px; font-size:0.9em; color:#777;">MAÇ KARELERİM 📸</h4>
-                <div id="my-photos-container" class="gallery-grid"></div>
-            </div>
-
-            <div id="profile-admin-panel" class="modern-stat-card" style="display:none; background:#fff3cd; border:1px solid #ffeeba; text-align:left; margin-top:20px;">
-                <h4 style="margin-top:0; color:#856404; border-bottom:1px solid #e6dbb9; padding-bottom:8px; font-weight:600;">🛠️ Sistem Yönetim Paneli (Admin)</h4>
-                <p style="font-size:0.8em; color:#666; margin-bottom:15px; line-height:1.4;">Bu panel sadece web sitesi genel yöneticilerine özeldir. Tüm ligi etkileyen kritik derin onarım mekanizmalarını içerir.</p>
-                <button onclick="window.recalculateAllPoints()" class="btn-main" style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); color:white; width:100%; box-shadow: 0 4px 10px rgba(245,124,0,0.3); font-weight:bold; padding:12px;">🛠️ Tüm Ligin Puanlarını Sıfırdan Onar</button>
-            </div>
-
-            
-            <div style="text-align:center; margin-top:30px; margin-bottom:30px;">
-                <button id="btn-delete-account" style="background:none; border:none; color:#dc3545; text-decoration:underline; font-size:0.9em; box-shadow:none;">Hesabımı Silmek İstiyorum</button>
-            </div>
-        </div>
-
-        <div id="match-detail-view" style="display: none;">
-            <div id="detail-match-info"></div>
-            <img id="detail-match-photo" src="" style="width:100%; border-radius:10px; margin-bottom:10px; display:none;">
-
-            <div id="match-interactions-container" style="margin-top: 20px; display:none;">
-                <div class="interaction-card">
-                    <h4 style="text-align:center; margin-bottom:10px;">📊 Sence Kim Kazanır?</h4>
-                    <div id="poll-loading" style="text-align:center; color:#999;">Yükleniyor...</div>
-                    <div id="poll-voting-area" style="display:none;">
-                        <button id="btn-vote-p1" class="btn-poll-option">Oyuncu 1</button>
-                        <button id="btn-vote-p2" class="btn-poll-option">Oyuncu 2</button>
-                    </div>
-                    <div id="poll-results-area" style="display:none;">
-                        <div class="poll-result-row">
-                            <span id="poll-name-p1" style="font-size:0.8em; font-weight:bold;">P1</span>
-                            <span id="poll-perc-p1" style="float:right; font-size:0.8em;">0%</span>
-                            <div class="poll-bar-bg"><div id="poll-bar-p1" class="poll-bar-fill" style="width:0%; background:#007bff;"></div></div>
-                        </div>
-                        <div class="poll-result-row">
-                            <span id="poll-name-p2" style="font-size:0.8em; font-weight:bold;">P2</span>
-                            <span id="poll-perc-p2" style="float:right; font-size:0.8em;">0%</span>
-                            <div class="poll-bar-bg"><div id="poll-bar-p2" class="poll-bar-fill" style="width:0%; background:#dc3545;"></div></div>
-                        </div>
-                        <div style="text-align:center; font-size:0.7em; color:#777; margin-top:5px;">Toplam <span id="poll-total-votes">0</span> oy</div>
-                    </div>
-                </div>
-
-                <div class="interaction-card" style="margin-top:15px;">
-                    <h4 style="margin-bottom:10px;">💬 Maç Yorumları</h4>
-                    <div id="match-comments-list" class="comments-list">
-                        <p style="text-align:center; color:#999;">Henüz yorum yok.</p>
-                    </div>
-                    <div class="comment-input-area">
-                        <input type="text" id="match-comment-input" placeholder="Yorum yaz..." maxlength="140">
-                        <button id="btn-send-match-comment" style="width:auto; margin:0; padding:10px;">Gönder</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="score-input-section" style="display:none;"></div>
-            <div id="schedule-input-section" style="display:none;"></div>
-            <div id="score-display-section" style="display:none;"></div>
-            
-            <select id="winner-select" style="display:none;"><option value="">Kazananı Seçin</option></select>
-            <div id="action-buttons-container"></div>
-            <p id="result-message"></p>
-            
-            <div id="photo-upload-area" style="display:none; margin-top:15px; text-align:center;">
-                <input type="file" id="standalone-photo-input" accept="image/*" style="display:none;">
-                <label for="standalone-photo-input" class="btn-purple" style="width:auto; display:inline-block; padding:8px 15px; cursor:pointer;">📸 Fotoğraf Seç</label>
-                <br>
-                <img id="standalone-photo-preview" style="width:100px; height:100px; object-fit:cover; margin-top:10px; display:none; border-radius:10px;">
-                <br>
-                <button id="btn-save-photo-only" class="btn-save" style="width:auto; margin-top:10px;">Fotoğrafı Kaydet 💾</button>
-            </div>
-
-            <button id="btn-share-match-detail" class="btn-main" style="background: linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d); margin-top: 15px; margin-bottom: 10px;">
-                📸 Instagram'da Paylaş
-            </button>
-
-            <button id="back-to-list-btn">Geri Dön</button>
-        </div>
-
-        <div id="player-stats-modal" class="modal">
-            <div class="modal-content">
-                <span id="close-stats-modal" class="close-modal">&times;</span>
-                <div class="modal-header-center">
-                    <img id="stats-player-photo" src="" class="modal-photo">
-                    <h3 id="stats-player-name" style="margin-bottom: 5px;"></h3>
-                  <div style="font-size:0.9em; color:#666; margin-bottom:10px;">
-                        👤 <span id="stats-total-points" style="font-weight:bold; color:#e65100;"></span> &nbsp;|&nbsp; 
-                        👥 <span id="stats-doubles-points" style="font-weight:bold; color:#6f42c1;"></span> <br>
-                        <span id="stats-court-pref" style="display:inline-block; margin-top:5px;"></span>
-                    </div>
-                    <button id="start-chat-btn" class="btn-chat" style="margin: 0 auto 10px auto;">Mesaj Gönder 💬</button>
-                </div>
-                <div class="stats-container">
-                    <div id="stats-h2h-box" class="h2h-box" style="display:none;">Aramızdaki Maçlar Yükleniyor...</div>
-                    <div style="margin-bottom: 15px;">
-                        <div style="font-size:0.8em; color:#666; margin-bottom:5px; text-align:center; text-transform:uppercase; letter-spacing:1px;">Koleksiyon</div>
-                        <div id="stats-badges-grid" class="badges-container"></div>
-                    </div>
-                    <div class="form-container">
-                        <span class="form-title">Son 5 Maç Formu</span>
-                        <div id="stats-form-badges" class="form-badges"></div>
-                    </div>
-                    <div class="pies-container">
-                        <div class="pie-wrapper"><div class="stat-pie" id="pie-match-chart" style="--p:0;"><span id="text-match-rate">0%</span></div><span class="pie-label">Maç</span></div>
-                        <div class="pie-wrapper"><div class="stat-pie" id="pie-set-chart" style="--p:0; background: conic-gradient(#007bff var(--p), #e9ecef 0);"><span id="text-set-rate">0%</span></div><span class="pie-label">Set</span></div>
-                        <div class="pie-wrapper"><div class="stat-pie" id="pie-game-chart" style="--p:0; background: conic-gradient(#ffc107 var(--p), #e9ecef 0);"><span id="text-game-rate">0%</span></div><span class="pie-label">Oyun</span></div>
-                    </div>
-                    <div id="player-stats-photos" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;"></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="chat-window-modal" class="modal">
-            <div class="modal-content chat-content">
-                <div class="chat-header">
-                    <h3 id="chat-recipient-name">Sohbet</h3>
+            <div id="dashboard-screen" style="display: none;">
+                <div id="user-profile-bar" style="display: flex; align-items: center; gap: 10px; background: #f1f3f5; padding: 10px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
+                    <span id="user-avatar" style="font-size: 30px;">👤</span>
                     <div>
-                        <button id="clear-chat-btn" style="background: none; border: none; color: #dc3545; font-size: 0.8em; margin-right: 10px; cursor: pointer;">Temizle 🗑️</button>
-                        <span id="close-chat-window" class="close-modal-x" style="font-size:24px; cursor: pointer;">&times;</span>
+                        <div id="user-welcome" style="font-weight: bold; color: #2c4d61;">Merhaba!</div>
+                        <div id="user-badge" style="font-size: 11px; background: #7f8c8d; color: white; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 3px;">Standart Üye</div>
                     </div>
+                    <button id="logout-btn" style="margin-left: auto; background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;">Çıkış</button>
                 </div>
-                <div id="chat-messages" class="chat-messages"></div>
-                <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Mesaj yaz...">
-                    <button id="send-message-btn">Gönder</button>
+
+                <h2>Kayıtlı Olduğunuz Ekipler</h2>
+                <ul id="group-list" style="margin-bottom: 15px;"></ul>
+
+                <div id="create-group-area" style="background: #fffdf5; border: 1px solid #f1c40f; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
+                    <h3 style="color: #b7950b; font-size: 14px; margin-bottom: 5px;">👑 Premium Grup Kur</h3>
+                    <div class="input-group" style="margin-bottom: 5px;">
+                        <input type="text" id="new-group-name" placeholder="Ekip Adı (Örn: Cuma Batakçıları)">
+                        <button id="create-group-btn" class="btn-secondary" style="border-color: #f1c40f; color: #b7950b;">Kur</button>
+                    </div>
+                    <small id="group-notice" style="color: #7f8c8d; font-size: 11px;">Grup oluşturmak Admin yetkisi gerektirir.</small>
+                </div>
+
+                <button id="dashboard-quick-btn" class="btn-primary">Kayıtsız Hızlı Maç Başlat</button>
+            </div>
+
+            <div id="group-detail-screen" style="display: none;">
+                <h2 id="detail-group-name" style="color: #1c7b64; font-size: 24px; margin-bottom: 15px;">Grup Detayı</h2>
+                
+                <div style="text-align: left; margin-bottom: 20px;">
+                    <h3 style="font-size: 16px; color: #2c4d61; margin-bottom: 8px;">📊 Genel Puan Tablosu</h3>
+                    <div id="detail-leaderboard" style="background: #ffffff; border: 1px solid #dee2e6; border-radius: 12px; padding: 10px;">
+                        </div>
+                </div>
+
+                <div style="text-align: left; margin-bottom: 25px;">
+                    <h3 style="font-size: 16px; color: #2c4d61; margin-bottom: 8px;">⏳ Son Oynanan 5 Oyun</h3>
+                    <div id="detail-recent-games" style="display: flex; flex-direction: column; gap: 8px;">
+                        </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="detail-back-btn" class="btn-secondary" style="flex: 1;">Gruplara Dön</button>
+                    <button id="detail-start-match-btn" class="btn-primary" style="flex: 2;">Yeni Maç Başlat</button>
                 </div>
             </div>
-        </div>
 
-        <div id="notification-container"></div>
+            <div id="setup-screen" style="display: none;">
+                <h2 id="setup-title">Oyuncuları Seç</h2>
+                <div id="setup-add-area" class="input-group">
+                    <input type="text" id="player-name" placeholder="Oyuncu Adı">
+                    <button id="add-player-btn" class="btn-secondary">Ekle</button>
+                </div>
+                <ul id="player-list"></ul>
+                
+                <div id="game-settings-area" style="margin-bottom: 20px; text-align: left; display: none; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <label style="font-weight: bold; color: #2c4d61; display: block; margin-bottom: 5px;">Hangi Oyun Oynanacak?</label>
+                    <select id="game-type" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ced4da; font-size: 16px;">
+                        <option value="pisti">Pişti</option>
+                        <option value="okey">Okey (Düz)</option>
+                        <option value="101">101 Okey</option>
+                        <option value="batak">Batak</option>
+                        <option value="king">King</option>
+                    </select>
+
+                    <label style="font-weight: bold; color: #2c4d61; display: block; margin-bottom: 5px;">Kazanma Şartı Nedir?</label>
+                    <select id="win-condition" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ced4da; font-size: 16px;">
+                        <option value="high">En Yüksek Puan Kazanır</option>
+                        <option value="low">En Düşük Puan Kazanır</option>
+                    </select>
+
+                    <label style="font-weight: bold; color: #2c4d61; display: block; margin-bottom: 5px;">Hedef Puan (İsteğe Bağlı)</label>
+                    <input type="number" id="target-score" placeholder="Örn: 101" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ced4da; font-size: 16px;">
+
+                    <label style="font-weight: bold; color: #2c4d61; display: block; margin-bottom: 5px;">Oyun Sayma Mantığı</label>
+                    <select id="stat-type" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ced4da; font-size: 16px;">
+                        <option value="per-party">Her Parti = 1 Oyun Sayılsın</option>
+                        <option value="per-series">Tüm Seri = 1 Oyun Sayılsın</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="setup-back-btn" class="btn-secondary" style="flex: 1; display: none;">Geri Dön</button>
+                    <button id="start-match-btn" class="btn-primary" style="display: none; flex: 2;">Başla!</button>
+                </div>
+            </div>
+
+            <div id="game-screen" style="display: none;">
+                <h2 id="party-title" style="color: #1c7b64; font-size: 16px; margin-bottom: 5px;">1. Parti Oynanıyor</h2>
+                <div id="live-series-score" style="background: #f1f3f5; border: 1px solid #dee2e6; padding: 12px; border-radius: 8px; font-size: 14px; color: #32546d; margin-bottom: 15px; text-align: left;"></div>
+                
+                <div class="table-responsive">
+                    <table id="score-table">
+                        <thead id="score-thead"></thead>
+                        <tbody id="score-tbody"></tbody>
+                        <tfoot id="score-tfoot"></tfoot>
+                    </table>
+                </div>
+                
+                <div class="game-controls">
+                    <button id="new-round-btn" class="btn-secondary" style="width: 100%; padding: 12px; margin-bottom: 10px;">➕ Yeni El (Tur) Ekle</button>
+                    <button id="manual-end-btn" class="btn-primary" style="background-color: #e74c3c;">Partiyi Bitir</button>
+                </div>
+            </div>
+
+            <div id="end-screen" style="display: none;">
+                <h2>🎉 Parti Bitti! 🎉</h2>
+                <div id="series-score-board" style="background: #eaf2f8; border: 2px solid #3498db; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                    <h3 style="color: #2980b9; margin-bottom: 10px; font-size: 16px;">🏆 Toplam Parti Skorları</h3>
+                    <div id="series-score-list" style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;"></div>
+                </div>
+                <div id="podium"></div>
+                <div style="display: flex; gap: 10px; margin-top: 25px;">
+                    <button id="end-completely-btn" class="btn-secondary" style="flex: 1; border-color: #e74c3c; color: #e74c3c;">Oyunu Bitir</button>
+                    <button id="next-party-btn" class="btn-primary" style="flex: 1;">Next Parti</button>
+                </div>
+            </div>
+
+            <div id="summary-screen" style="display: none;">
+                <h2>📊 Turnuva İstatistik Özeti 📊</h2>
+                <div id="game-count-info" style="font-weight: bold; color: #2c4d61; margin-bottom: 15px; font-size: 15px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #e1e8ed;"></div>
+                <div id="summary-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 25px;"></div>
+                <button id="final-restart-btn" class="btn-primary">Ana Panele Dön</button>
+            </div>
+        </div>
         
-        
-    </div>
-    
-    <div style="height: 120px;"></div>
-<nav class="bottom-nav">
-        <div class="nav-item active" data-target="tab-lobby"><span class="nav-icon">🏠</span><br>Lobi</div>
-        <div class="nav-item" data-target="tab-tournaments"><span class="nav-icon">🏆</span><br>Turnuva</div>
-        <div class="nav-item" data-target="tab-rankings"><span class="nav-icon">🥇</span><br>Sıralama</div>
-        <div class="nav-item" data-target="tab-challenge"><span class="nav-icon">⚔️</span><br>Meydan</div>
-        
-        <div class="nav-item" data-target="tab-fixture"><span class="nav-icon">🌎</span><br>Lig</div>
-        <div class="nav-item" data-target="tab-matches"><span class="nav-icon">🎾</span><br>Maçlarım</div>
-        <div class="nav-item" data-target="tab-stats"><span class="nav-icon">📊</span><br>İstatistik</div>
-        <div class="nav-item" data-target="tab-gallery"><span class="nav-icon">📸</span><br>Galeri</div>
-        <div class="nav-item" data-target="tab-chat"><span class="nav-icon">💬</span><br>Mesajlar</div>
-        <div class="nav-item" data-target="tab-bests"><span class="nav-icon">🌟</span><br>En'ler</div>
-        <div class="nav-item" data-target="tab-profile"><span class="nav-icon">👤</span><br>Profil</div>
-    </nav>
-
-    <div id="forgot-password-modal" class="modal">
-        <div class="modal-content" style="text-align:center;">
-            <span onclick="document.getElementById('forgot-password-modal').style.display='none'" class="close-modal">&times;</span>
-            <h3>🔑 Şifre Sıfırlama</h3>
-            <p style="font-size:0.9em; color:#666; margin-bottom:15px;">Hesabına kayıtlı e-posta adresini gir. Şifreni sıfırlaman için bir bağlantı göndereceğiz.</p>
-            <div class="input-group">
-                <span class="input-icon">✉️</span>
-                <input type="email" id="reset-email" placeholder="E-posta Adresin">
-            </div>
-            <button id="btn-send-reset-link" class="btn-main">Sıfırlama Bağlantısı Gönder</button>
-            <p id="reset-msg" style="font-size:0.9em; margin-top:10px;"></p>
-        </div>
+        <div id="status-message">Firebase bağlantısı bekleniyor...</div>
     </div>
 
-    <div id="onboarding-modal" class="modal" style="display: none; z-index: 2000;">
-        <div class="modal-content onboarding-content">
-            <span id="close-onboarding" class="close-modal">&times;</span>
-            <div class="onboarding-slider">
-                <div class="onboarding-slide active-slide" data-index="0">
-                    <div class="slide-icon">👋</div>
-                    <h3>Kortlara Hoş Geldin!</h3>
-                    <p>Tenis Ligi'nin dijital dünyasına adım attın. Burası sadece skor girdiğin yer değil, tenis tutkunu dijitalleştirdiğimiz yer.</p>
-                    <div class="slide-image-placeholder" style="background: #e3f2fd; color:#0d47a1;">🏆</div>
-                </div>
-                <div class="onboarding-slide" data-index="1">
-                    <div class="slide-icon">⚔️</div>
-                    <h3>Maç Ayarla & Meydan Oku</h3>
-                    <p><strong>"Meydan Oku"</strong> sekmesinden arkadaşına özel teklif gönder veya <strong>"Açık İlan"</strong> oluşturarak kendine uygun yeni rakipler bul.</p>
-                    <div class="slide-image-placeholder" style="background: #fff3e0; color:#e65100;">🎾</div>
-                </div>
-                <div class="onboarding-slide" data-index="2">
-                    <div class="slide-icon">📊</div>
-                    <h3>İstatistiklerin Konuşsun</h3>
-                    <p>Toprakta mı daha iyisin yoksa sert kortta mı? Galibiyet yüzdelerini, form durumunu ve kazandığın rozetleri <strong>"İstatistik"</strong> ve <strong>"Profil"</strong> sekmelerinde takip et.</p>
-                    <div class="slide-image-placeholder" style="background: #e8f5e9; color:#1b5e20;">📈</div>
-                </div>
-                <div class="onboarding-slide" data-index="3">
-                    <div class="slide-icon">💬</div>
-                    <h3>Sosyalleş & Paylaş</h3>
-                    <p>Maç sonuçlarına yorum yap, anketlere katıl, galibiyet fotoğraflarını yükle. Ligdeki herkesle etkileşimde kal!</p>
-                    <div class="slide-image-placeholder" style="background: #f3e5f5; color:#4a148c;">📸</div>
-                </div>
-            </div>
-            <div class="onboarding-footer">
-                <div class="dots-container">
-                    <span class="dot active"></span>
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                </div>
-                <button id="btn-next-slide" class="btn-main" style="margin:0; width: auto; padding: 10px 30px;">İlerle 👉</button>
-                <button id="btn-finish-onboarding" class="btn-main" style="margin:0; width: auto; padding: 10px 30px; display: none; background-color: #28a745;">Başla! 🚀</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="recap-modal" class="modal" style="display: none; z-index: 3000;">
-        <div id="recap-capture-area" class="modal-content recap-content" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border:none; text-align:center;">
-            <span id="close-recap" class="close-modal" style="color:white; opacity:0.8;">&times;</span>
-            <div id="recap-header">
-                <div style="font-size:3em; margin-bottom:10px;">🗓️</div>
-                <h2 id="recap-title" style="color:white; margin:0; text-shadow:0 2px 4px rgba(0,0,0,0.2);">Özet Yükleniyor...</h2>
-                <p id="recap-subtitle" style="color:rgba(255,255,255,0.8); margin-top:5px; font-size:0.9em;">Performans Raporu</p>
-            </div>
-            <div class="recap-stats-grid" style="margin: 20px 0; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <div class="recap-stat-box"><span class="recap-val" id="recap-matches">0</span><span class="recap-lbl">Maç</span></div>
-                <div class="recap-stat-box"><span class="recap-val" id="recap-wins">0</span><span class="recap-lbl">Galibiyet</span></div>
-                <div class="recap-stat-box"><span class="recap-val" id="recap-rate">%0</span><span class="recap-lbl">Kazanma</span></div>
-                <div class="recap-stat-box"><span class="recap-val" id="recap-points">0</span><span class="recap-lbl">Puan</span></div>
-            </div>
-            <div id="recap-photos-area" style="margin-bottom:20px; display:none;">
-                <p style="font-size:0.8em; color:rgba(255,255,255,0.7); margin-bottom:5px;">📸 Ayın Kareleri</p>
-                <div id="recap-photo-grid" style="display:flex; justify-content:center; gap:5px; overflow-x:auto;"></div>
-            </div>
-            <div id="recap-message" style="font-style:italic; font-size:0.95em; margin-bottom:20px; color:#ffc107;"></div>
-            <div class="share-branding" style="margin-bottom: 15px; font-size: 0.8em; opacity: 0.8; letter-spacing: 1px;">🏆 trtenis.com lig istatistikleri</div>
-            <button id="btn-share-recap" class="btn-main" style="background: white; color: #1e3c72; border:none; box-shadow:0 4px 15px rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; gap:10px; width:100%;">📸 Instagram'da Paylaş</button>
-            <p style="font-size:0.7em; color:rgba(255,255,255,0.6); margin-top:5px;">(Görseli Hikayene Ekleyebilirsin)</p>
-        </div>
-    </div>
-    <div id="tour-score-modal" class="modal" style="display: none; z-index: 3500;">
-        <div class="modal-content" style="text-align:center;">
-            <span onclick="document.getElementById('tour-score-modal').style.display='none'" class="close-modal">&times;</span>
-            <h3 style="color:#c06035;">🎾 Maç Sonucu Gir</h3>
-            <p id="tour-score-match-title" style="font-weight:bold; color:#555; margin-bottom:15px;"></p>
-            
-            <label class="input-label">Kazanan Taraf</label>
-            <select id="tour-score-winner-select" style="margin-bottom:15px;">
-                </select>
-
-            <label class="input-label">Maç Skoru (Örn: 6-4, 4-6, 10-8)</label>
-            <input type="text" id="tour-score-input" placeholder="Set skorlarını girin...">
-
-            <button id="btn-save-tour-score" class="btn-save" style="margin-top:15px;">Skoru Kaydet ve Tur Atlat 🚀</button>
-        </div>
-    </div>
-
-    <div id="lobby-detail-modal" class="modal" style="display: none; z-index: 2500;">
-        <div class="modal-content">
-            <span onclick="document.getElementById('lobby-detail-modal').style.display='none'" class="close-modal">&times;</span>
-            <div id="lobby-detail-content"></div>
-        </div>
-    </div>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?=141"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('./sw.js').then(function(registration) {
-                    console.log('SW Başarılı:', registration.scope);
-                }, function(err) { console.log('SW Hatası:', err); });
-            });
-        }
-    </script>
+    <script type="module" src="app.js?v=3.2"></script>
 </body>
 </html>
