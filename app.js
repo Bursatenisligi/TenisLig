@@ -3243,6 +3243,10 @@ window.adminAddParticipant = async function(tourId) {
     const p2 = document.getElementById('admin-p2-select')?.value || null;
     if(!p1) return alert("En az bir oyuncu seçmelisiniz.");
 
+    // Çift tıklamaları önlemek için butonu kilitliyoruz
+    const btnSave = document.getElementById('btn-admin-save-reg');
+    if(btnSave) { btnSave.disabled = true; btnSave.textContent = "Ekleniyor..."; }
+
     try {
         const docRef = db.collection('tournaments').doc(tourId);
         const tourSnap = await docRef.get();
@@ -3253,38 +3257,46 @@ window.adminAddParticipant = async function(tourId) {
         const isDoublesTour = !format.includes('Tekler');
         const pointField = isDoublesTour ? 'ciftlerPuani' : 'toplamPuan';
 
-        const p1Gender = userMap[p1]?.cinsiyet;
-        if (!p1Gender) return alert("Seçilen oyuncunun cinsiyet bilgisi eksik.");
-
-        if (format === 'Tekler Erkek' && p1Gender !== 'Erkek') return alert("Hata: Bu oyuncu Erkek değil.");
-        if (format === 'Tekler Kadın' && p1Gender !== 'Kadın') return alert("Hata: Bu oyuncu Kadın değil.");
-
-        // 🚀 BUG FIX: Admin panelinden eklerken de hibrit modu süzüyoruz
-        let finalRegType = regType;
-        if (regType === 'hybrid') {
-            finalRegType = p2 ? 'manual' : 'auto';
+        // --- GÜVENLİK KİLİDİ 1: OYUNCU ZATEN KAYITLI MI? ---
+        const participants = tourData.participants || [];
+        const p1AlreadyIn = participants.some(pt => pt.p1 === p1 || pt.p2 === p1);
+        if (p1AlreadyIn) throw new Error("Oyuncu 1 zaten bu turnuvaya kayıtlı!");
+        
+        if (p2) {
+            const p2AlreadyIn = participants.some(pt => pt.p1 === p2 || pt.p2 === p2);
+            if (p2AlreadyIn) throw new Error("Oyuncu 2 (Partner) zaten bu turnuvaya kayıtlı!");
         }
+
+        const p1Gender = userMap[p1]?.cinsiyet;
+        if (!p1Gender) throw new Error("Seçilen oyuncunun cinsiyet bilgisi eksik.");
+
+        if (format === 'Tekler Erkek' && p1Gender !== 'Erkek') throw new Error("Sadece Erkek oyuncu seçebilirsiniz.");
+        if (format === 'Tekler Kadın' && p1Gender !== 'Kadın') throw new Error("Sadece Kadın oyuncu seçebilirsiniz.");
+
+        let finalRegType = regType;
+        if (regType === 'hybrid') { finalRegType = p2 ? 'manual' : 'auto'; }
 
         if (!format.includes('Tekler') && finalRegType === 'auto') {
-            if (format === 'Double Erkek' && p1Gender !== 'Erkek') return alert("Hata: Sadece erkek oyuncu seçebilirsiniz.");
-            if (format === 'Double Kadın' && p1Gender !== 'Kadın') return alert("Hata: Sadece kadın oyuncu seçebilirsiniz.");
+            if (format === 'Double Erkek' && p1Gender !== 'Erkek') throw new Error("Sadece erkek oyuncu seçebilirsiniz.");
+            if (format === 'Double Kadın' && p1Gender !== 'Kadın') throw new Error("Sadece kadın oyuncu seçebilirsiniz.");
         } 
         else if (!format.includes('Tekler') && finalRegType === 'manual') {
-            if (!p2) return alert("Bu formatta partner seçmek zorunludur.");
+            if (!p2) throw new Error("Bu formatta partner seçmek zorunludur.");
             const p2Gender = userMap[p2]?.cinsiyet;
-            if (!p2Gender) return alert("Partnerin cinsiyet bilgisi eksik.");
+            if (!p2Gender) throw new Error("Partnerin cinsiyet bilgisi eksik.");
 
-            if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) return alert("Hata: Sadece Erkek-Erkek.");
-            if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) return alert("Hata: Sadece Kadın-Kadın.");
-            if (format === 'Mix' && (p1Gender === p2Gender)) return alert("Hata: Mix için 1 Kadın 1 Erkek gerekli.");
+            if (format === 'Double Erkek' && (p1Gender !== 'Erkek' || p2Gender !== 'Erkek')) throw new Error("Sadece Erkek-Erkek.");
+            if (format === 'Double Kadın' && (p1Gender !== 'Kadın' || p2Gender !== 'Kadın')) throw new Error("Sadece Kadın-Kadın.");
+            if (format === 'Mix' && (p1Gender === p2Gender)) throw new Error("Mix için 1 Kadın 1 Erkek gerekli.");
         }
 
+        // --- GÜVENLİK KİLİDİ 2: PUAN YETERLİ Mİ? ---
         const p1Points = isDoublesTour ? (userMap[p1].ciftlerPuani !== undefined ? userMap[p1].ciftlerPuani : 1000) : (userMap[p1].toplamPuan || 0);
-        if (p1Points < tourData.fee) return alert(`Hata: Oyuncu 1'in puanı (${p1Points} P) turnuva ücreti (${tourData.fee} P) için yetersiz!`);
+        if (p1Points < tourData.fee) throw new Error(`Oyuncu 1'in puanı (${p1Points} P) yetersiz!`);
 
         if (isDoublesTour && finalRegType === 'manual' && p2) {
             const p2Points = userMap[p2].ciftlerPuani !== undefined ? userMap[p2].ciftlerPuani : 1000;
-            if (p2Points < tourData.fee) return alert(`Hata: Seçilen partnerin puanı (${p2Points} P) turnuva ücreti (${tourData.fee} P) için yetersiz!`);
+            if (p2Points < tourData.fee) throw new Error(`Seçilen partnerin puanı (${p2Points} P) yetersiz!`);
         }
 
         const batch = db.batch();
@@ -3301,7 +3313,10 @@ window.adminAddParticipant = async function(tourId) {
         alert("Oyuncu(lar) turnuvaya başarıyla dahil edildi! ✅");
         openTournamentDetail(tourId, (await docRef.get()).data());
     } catch(e) { 
-        alert("Hata: Oyuncu eklenirken bir problem oluştu. " + e.message); 
+        alert("İşlem iptal edildi: " + e.message); 
+    } finally {
+        // İşlem bitince butonu tekrar aktifleştir
+        if(btnSave) { btnSave.disabled = false; btnSave.textContent = "Kaydı Ekle ✅"; }
     }
 };
 
@@ -4228,191 +4243,176 @@ if (btnRankSingles && btnRankDoubles) {
     }
 
 // --- 🛠️ TÜM LİGİN PUANLARINI SIFIRDAN HESAPLAMA VE ÖDÜL HAVUZLARINI KORUMA MOTORU ---
-    window.recalculateAllPoints = async function() {
-        if(!confirm("DİKKAT: Veritabanındaki manuel değişiklikler nedeniyle bozulan puanları düzeltmek için tüm ligin puanları maç geçmişine bakılarak SIFIRDAN hesaplanacaktır. Turnuva büyük ödülleri de korunacaktır. Onaylıyor musunuz?")) return;
-        try {
-            // Ekrana yükleniyor efekti koyuyoruz
-            const loading = document.createElement('div');
-            loading.id = 'recalc-loading';
-            loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;font-size:1.2em;font-weight:bold;text-align:center;padding:20px;';
-            loading.innerHTML = '<div>Lig verileri taranıyor ve puanlar sıfırdan inşa ediliyor...</div><div style="font-size:0.8em; color:#ff9800; margin-top:10px;">Turnuva ödül havuzları korunuyor, lütfen sekmeyi kapatmayın ⏳</div>';
-            document.body.appendChild(loading);
+window.recalculateAllPoints = async function() {
+    if(!confirm("DİKKAT: Veritabanındaki manuel değişiklikler nedeniyle bozulan puanları düzeltmek için tüm ligin puanları maç geçmişine bakılarak SIFIRDAN hesaplanacaktır. Onaylıyor musunuz?")) return;
+    try {
+        const loading = document.createElement('div');
+        loading.id = 'recalc-loading';
+        loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;font-size:1.2em;font-weight:bold;text-align:center;padding:20px;';
+        loading.innerHTML = '<div>Lig verileri taranıyor ve puanlar sıfırdan inşa ediliyor...</div><div style="font-size:0.8em; color:#ff9800; margin-top:10px;">Lütfen sekmeyi kapatmayın ⏳</div>';
+        document.body.appendChild(loading);
 
-            // 1. ADIM: Tüm kullanıcıları al ve başlangıç taban puanına (1000) sıfırla
-            const usersSnap = await db.collection('users').get();
-            let userStats = {};
-            usersSnap.forEach(doc => {
-                userStats[doc.id] = {
-                    toplamPuan: 1000,
-                    ciftlerPuani: 1000,
-                    galibiyetSayisi: 0,
-                    macSayisi: 0,
-                    ref: doc.ref
-                };
-            });
+        // 1. ADIM: Tüm kullanıcıları başlangıç puanına (1000) sıfırla
+        const usersSnap = await db.collection('users').get();
+        let userStats = {};
+        usersSnap.forEach(doc => {
+            userStats[doc.id] = { toplamPuan: 1000, ciftlerPuani: 1000, galibiyetSayisi: 0, macSayisi: 0, ref: doc.ref };
+        });
 
-            // 2. ADIM: Tüm tamamlanmış lig ve lobi maçlarını çekip standart puanları hesapla
-            const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
-
-            matchesSnap.forEach(doc => {
-                const m = doc.data();
-                const wid = m.kayitliKazananID;
-                if(!wid) return; // Kazananı elle seçilmemiş hatalı maçları pas geç
-                
-                const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
-
-                // Partnerleri ayrıştır
-                let wPartnerId = null; let lPartnerId = null;
-                if (!(m.macFormati || '').includes('Tekler')) {
-                    wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
-                    lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
-                }
-
-                // Standart Set ve Averaj Puan Matematiği
-                let wg = 0, lg = 0;
-                if(m.skor) {
-                    const s = m.skor;
-                    if (m.macTipi === 'Turnuva') {
-                        const p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0);
-                        const p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0);
-                        if (m.oyuncu1ID === wid) { wg = p1G; lg = p2G; } else { wg = p2G; lg = p1G; }
-                    } else {
-                        const isEntryByWinner = m.sonucuGirenID === wid;
-                        const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0);
-                        const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0);
-                        const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0);
-                        const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
-                        wg = s1w + s2w; lg = s1l + s2l;
-                    }
-                }
-                const bonusW = wg * 5; const bonusL = lg * 5;
-
-                let winPoints = 50 + bonusW; let losePoints = 50 + bonusL;
-                if(m.macTipi === 'Meydan Okuma') { winPoints = m.bahisPuani + bonusW; losePoints = -m.bahisPuani + bonusL; }
-
-                // Puanları lokal bellek havuzuna işleme fonksiyonu
-                const applyToUser = (uid, isWin) => {
-                    if(!uid || !userStats[uid]) return;
-                    userStats[uid].macSayisi += 1;
-                    if(isWin) userStats[uid].galibiyetSayisi += 1;
-
-                    if (!(m.macFormati || '').includes('Tekler')) {
-                        userStats[uid].ciftlerPuani += isWin ? winPoints : losePoints;
-                    } else {
-                        userStats[uid].toplamPuan += isWin ? winPoints : losePoints;
-                    }
-                };
-
-                applyToUser(wid, true);
-                applyToUser(lid, false);
-                if (!(m.macFormati || '').includes('Tekler')) {
-                    applyToUser(wPartnerId, true);
-                    applyToUser(lPartnerId, false);
-                }
-            });
-
-            // 🚀 3. ADIM [KRİTİK GÜVENLİK]: Ödülü Dağıtılmış Turnuvaları Bul ve Büyük Havuz Puanlarını Geri Ekle
-            const tourSnap = await db.collection('tournaments').where('prizeDistributed', '==', true).get();
+        // 2. ADIM: Tüm tamamlanmış maçları işle
+        const matchesSnap = await db.collection('matches').where('durum', '==', 'Tamamlandı').get();
+        matchesSnap.forEach(doc => {
+            const m = doc.data();
+            const wid = m.kayitliKazananID;
+            if(!wid) return; 
             
-            tourSnap.forEach(tourDoc => {
-                const tourData = tourDoc.data();
-                const fee = tourData.fee || 0;
-                const participants = tourData.participants || [];
-                if (fee === 0 || participants.length === 0) return;
-
-                const isDoubles = !(tourData.format || '').includes('Tekler');
-                const pointField = isDoubles ? 'ciftlerPuani' : 'toplamPuan';
-
-                // Turnuvadaki toplam tekil oyuncu sayısını bul (Havuz hesaplaması için)
-                let totalPlayersCount = 0;
-                participants.forEach(p => {
-                    if (p.p1) totalPlayersCount++;
-                    if (p.p2) totalPlayersCount++;
-                });
-
-                const totalPrizePool = totalPlayersCount * fee;
-                if (totalPrizePool === 0) return;
-
-                // Ödülü lokal hafızadaki oyuncuya mühürleyen iç fonksiyon
-                const addPrizeToMemory = (teamObj, prizeAmount) => {
-                    if (!teamObj || !teamObj.p1) return;
-                    let perPlayerPrize = prizeAmount;
-                    
-                    // Çiftler takımı ise büyük ödül partnerler arasında eşit bölünür
-                    if (isDoubles && teamObj.p2) perPlayerPrize = Math.round(prizeAmount / 2);
-
-                    if (userStats[teamObj.p1]) userStats[teamObj.p1][pointField] += perPlayerPrize;
-                    if (isDoubles && teamObj.p2 && userStats[teamObj.p2]) userStats[teamObj.p2][pointField] += perPlayerPrize;
-                };
-
-                // --- SENARYO A: LİG USULÜ TURNUVA (Podyum Modeli: %50, %30, %20) REKONSTRÜKSİYONU ---
-                if (tourData.systemType === 'league' && tourData.bracket) {
-                    let statsLeague = {};
-                    tourData.bracket.forEach(round => {
-                        round.matches.forEach(m => {
-                            if(!m.p1 || !m.p2) return;
-                            const p1Id = m.p1.p1 + (m.p1.p2 ? "_" + m.p1.p2 : "");
-                            const p2Id = m.p2.p1 + (m.p2.p2 ? "_" + m.p2.p2 : "");
-                            if(!statsLeague[p1Id]) statsLeague[p1Id] = { obj: m.p1, pts: 0 };
-                            if(!statsLeague[p2Id]) statsLeague[p2Id] = { obj: m.p2, pts: 0 };
-                            if (m.winner) {
-                                if (m.winner.p1 === m.p1.p1) { statsLeague[p1Id].pts += 3; statsLeague[p2Id].pts += 1; }
-                                else { statsLeague[p2Id].pts += 3; statsLeague[p1Id].pts += 1; }
-                            }
-                        });
-                    });
-                    const sortedLeague = Object.values(statsLeague).sort((a,b) => b.pts - a.pts);
-                    if(sortedLeague[0]) addPrizeToMemory(sortedLeague[0].obj, Math.round(totalPrizePool * 0.50));
-                    if(sortedLeague[1]) addPrizeToMemory(sortedLeague[1].obj, Math.round(totalPrizePool * 0.30));
-                    if(sortedLeague[2]) addPrizeToMemory(sortedLeague[2].obj, Math.round(totalPrizePool * 0.20));
-                } 
-                // --- SENARYO B: ELEMELİ / GRUPLU TURNUVA (ATP Kademeli Model: %60, %25, %7.5) REKONSTRÜKSİYONU ---
-                else if (tourData.bracket && tourData.bracket.length > 0) {
-                    const finalRound = tourData.bracket[tourData.bracket.length - 1];
-                    const finalMatch = finalRound?.matches?.[0];
-                    if (finalMatch && finalMatch.winner) {
-                        const championTeam = finalMatch.winner;
-                        addPrizeToMemory(championTeam, Math.round(totalPrizePool * 0.60)); // %60 Şampiyona
-
-                        const finalistTeam = (finalMatch.p1.p1 === championTeam.p1) ? finalMatch.p2 : finalMatch.p1;
-                        addPrizeToMemory(finalistTeam, Math.round(totalPrizePool * 0.25)); // %25 Finaliste
-
-                        // Yarı finalistleri bul ve her birine %7.5 ekle
-                        if (tourData.bracket.length >= 2) {
-                            const semiRound = tourData.bracket[tourData.bracket.length - 2];
-                            semiRound.matches.forEach(m => {
-                                const loserTeam = (m.winner?.p1 === m.p1?.p1) ? m.p2 : m.p1;
-                                if(loserTeam && !loserTeam.isBye) {
-                                    addPrizeToMemory(loserTeam, Math.round(totalPrizePool * 0.075));
-                                }
-                            });
-                        }
-                    }
-                }
-            });
-
-            // 4. ADIM: Hesaplanan Kusursuz Yeni Puanları Veritabanına Topluca (Batch) Yazdır
-            const batch = db.batch();
-            for (const uid in userStats) {
-                const u = userStats[uid];
-                batch.update(u.ref, {
-                    toplamPuan: u.toplamPuan,
-                    ciftlerPuani: u.ciftlerPuani,
-                    galibiyetSayisi: u.galibiyetSayisi,
-                    macSayisi: u.macSayisi
-                });
+            const lid = (m.oyuncu1ID === wid) ? m.oyuncu2ID : m.oyuncu1ID;
+            let wPartnerId = null; let lPartnerId = null;
+            if (!(m.macFormati || '').includes('Tekler')) {
+                wPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu1PartnerID : m.oyuncu2PartnerID;
+                lPartnerId = (m.oyuncu1ID === wid) ? m.oyuncu2PartnerID : m.oyuncu1PartnerID;
             }
 
-            await batch.commit();
-            document.getElementById('recalc-loading').remove();
-            alert("Muazzam! Tüm lig puanları, tekil maçlar ve turnuva ödül havuzları taranarak sıfırdan başarıyla onarıldı! 🚀👑");
-            window.location.reload();
-        } catch(e) {
-            console.error(e);
-            alert("Onarım sırasında hata oluştu: " + e.message);
-            if(document.getElementById('recalc-loading')) document.getElementById('recalc-loading').remove();
+            let wg = 0, lg = 0;
+            if(m.skor) {
+                const s = m.skor;
+                if (m.macTipi === 'Turnuva') {
+                    const p1G = parseInt(s.s1_me||0) + parseInt(s.s2_me||0);
+                    const p2G = parseInt(s.s1_opp||0) + parseInt(s.s2_opp||0);
+                    if (m.oyuncu1ID === wid) { wg = p1G; lg = p2G; } else { wg = p2G; lg = p1G; }
+                } else {
+                    const isEntryByWinner = m.sonucuGirenID === wid;
+                    const s1w = isEntryByWinner ? parseInt(s.s1_me||0) : parseInt(s.s1_opp||0);
+                    const s1l = isEntryByWinner ? parseInt(s.s1_opp||0) : parseInt(s.s1_me||0);
+                    const s2w = isEntryByWinner ? parseInt(s.s2_me||0) : parseInt(s.s2_opp||0);
+                    const s2l = isEntryByWinner ? parseInt(s.s2_opp||0) : parseInt(s.s2_me||0);
+                    wg = s1w + s2w; lg = s1l + s2l;
+                }
+            }
+            
+            const bonusW = (isNaN(wg) ? 0 : wg) * 5; 
+            const bonusL = (isNaN(lg) ? 0 : lg) * 5;
+            let winPoints = 50 + bonusW; 
+            let losePoints = 50 + bonusL;
+            if(m.macTipi === 'Meydan Okuma') { winPoints = (m.bahisPuani||0) + bonusW; losePoints = -(m.bahisPuani||0) + bonusL; }
+
+            const applyToUser = (uid, isWin) => {
+                if(!uid || !userStats[uid]) return;
+                userStats[uid].macSayisi += 1;
+                if(isWin) userStats[uid].galibiyetSayisi += 1;
+
+                if (!(m.macFormati || '').includes('Tekler')) {
+                    userStats[uid].ciftlerPuani += isWin ? winPoints : losePoints;
+                } else {
+                    userStats[uid].toplamPuan += isWin ? winPoints : losePoints;
+                }
+            };
+
+            applyToUser(wid, true); applyToUser(lid, false);
+            if (!(m.macFormati || '').includes('Tekler')) { applyToUser(wPartnerId, true); applyToUser(lPartnerId, false); }
+        });
+
+        // 3. ADIM [EKSİK OLAN KRİTİK ADIM]: Turnuva Katılım Ücretlerini Düş
+        const allToursSnap = await db.collection('tournaments').get();
+        allToursSnap.forEach(tourDoc => {
+            const tourData = tourDoc.data();
+            const fee = tourData.fee || 0;
+            if(fee === 0) return;
+            
+            const isDoubles = !(tourData.format || '').includes('Tekler');
+            const pointField = isDoubles ? 'ciftlerPuani' : 'toplamPuan';
+            
+            (tourData.participants || []).forEach(p => {
+                if (p.p1 && userStats[p.p1]) userStats[p.p1][pointField] -= fee;
+                if (p.p2 && userStats[p.p2]) userStats[p.p2][pointField] -= fee;
+            });
+        });
+
+        // 4. ADIM: Ödülü Dağıtılmış Turnuvaları Bul ve Büyük Havuz Puanlarını Geri Ekle
+        const prizeToursSnap = await db.collection('tournaments').where('prizeDistributed', '==', true).get();
+        prizeToursSnap.forEach(tourDoc => {
+            const tourData = tourDoc.data();
+            const fee = tourData.fee || 0;
+            const participants = tourData.participants || [];
+            if (fee === 0 || participants.length === 0) return;
+
+            const isDoubles = !(tourData.format || '').includes('Tekler');
+            const pointField = isDoubles ? 'ciftlerPuani' : 'toplamPuan';
+
+            let totalPlayersCount = 0;
+            participants.forEach(p => { if (p.p1) totalPlayersCount++; if (p.p2) totalPlayersCount++; });
+            const totalPrizePool = totalPlayersCount * fee;
+            if (totalPrizePool === 0) return;
+
+            const addPrizeToMemory = (teamObj, prizeAmount) => {
+                if (!teamObj || !teamObj.p1) return;
+                let perPlayerPrize = prizeAmount;
+                if (isDoubles && teamObj.p2) perPlayerPrize = Math.round(prizeAmount / 2);
+                if (userStats[teamObj.p1]) userStats[teamObj.p1][pointField] += perPlayerPrize;
+                if (isDoubles && teamObj.p2 && userStats[teamObj.p2]) userStats[teamObj.p2][pointField] += perPlayerPrize;
+            };
+
+            if (tourData.systemType === 'league' && tourData.bracket) {
+                let statsLeague = {};
+                tourData.bracket.forEach(round => {
+                    round.matches.forEach(m => {
+                        if(!m.p1 || !m.p2) return;
+                        const p1Id = m.p1.p1 + (m.p1.p2 ? "_" + m.p1.p2 : "");
+                        const p2Id = m.p2.p1 + (m.p2.p2 ? "_" + m.p2.p2 : "");
+                        if(!statsLeague[p1Id]) statsLeague[p1Id] = { obj: m.p1, pts: 0 };
+                        if(!statsLeague[p2Id]) statsLeague[p2Id] = { obj: m.p2, pts: 0 };
+                        if (m.winner) {
+                            if (m.winner.p1 === m.p1.p1) { statsLeague[p1Id].pts += 3; statsLeague[p2Id].pts += 1; }
+                            else { statsLeague[p2Id].pts += 3; statsLeague[p1Id].pts += 1; }
+                        }
+                    });
+                });
+                const sortedLeague = Object.values(statsLeague).sort((a,b) => b.pts - a.pts);
+                if(sortedLeague[0]) addPrizeToMemory(sortedLeague[0].obj, Math.round(totalPrizePool * 0.50));
+                if(sortedLeague[1]) addPrizeToMemory(sortedLeague[1].obj, Math.round(totalPrizePool * 0.30));
+                if(sortedLeague[2]) addPrizeToMemory(sortedLeague[2].obj, Math.round(totalPrizePool * 0.20));
+            } 
+            else if (tourData.bracket && tourData.bracket.length > 0) {
+                const finalRound = tourData.bracket[tourData.bracket.length - 1];
+                const finalMatch = finalRound?.matches?.[0];
+                if (finalMatch && finalMatch.winner) {
+                    const championTeam = finalMatch.winner;
+                    addPrizeToMemory(championTeam, Math.round(totalPrizePool * 0.60));
+                    const finalistTeam = (finalMatch.p1.p1 === championTeam.p1) ? finalMatch.p2 : finalMatch.p1;
+                    addPrizeToMemory(finalistTeam, Math.round(totalPrizePool * 0.25));
+                    if (tourData.bracket.length >= 2) {
+                        const semiRound = tourData.bracket[tourData.bracket.length - 2];
+                        semiRound.matches.forEach(m => {
+                            const loserTeam = (m.winner?.p1 === m.p1?.p1) ? m.p2 : m.p1;
+                            if(loserTeam && !loserTeam.isBye) addPrizeToMemory(loserTeam, Math.round(totalPrizePool * 0.075));
+                        });
+                    }
+                }
+            }
+        });
+
+        // 5. ADIM: Hesaplanan Kusursuz Yeni Puanları Veritabanına Topluca Yazdır
+        const batch = db.batch();
+        for (const uid in userStats) {
+            const u = userStats[uid];
+            batch.update(u.ref, {
+                toplamPuan: u.toplamPuan,
+                ciftlerPuani: u.ciftlerPuani,
+                galibiyetSayisi: u.galibiyetSayisi,
+                macSayisi: u.macSayisi
+            });
         }
-    };
+
+        await batch.commit();
+        document.getElementById('recalc-loading').remove();
+        alert("Muazzam! Tüm lig puanları, katılım ücretleri ve turnuva ödül havuzları taranarak sıfırdan başarıyla onarıldı! 🚀👑");
+        window.location.reload();
+    } catch(e) {
+        console.error(e);
+        alert("Onarım sırasında hata oluştu: " + e.message);
+        if(document.getElementById('recalc-loading')) document.getElementById('recalc-loading').remove();
+    }
+};
 // --- YENİ: OTOMATİK DENK/KURA TAKIM KURMA ALGORİTMASI ---
 // --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
 // --- YENİ: OYUN KAZANMA YÜZDESİNE GÖRE DENK/KURA TAKIM KURMA ALGORİTMASI ---
